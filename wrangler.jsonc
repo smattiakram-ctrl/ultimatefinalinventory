@@ -1,20 +1,15 @@
-name = "akramgoodsfinalver"
-main = "worker.ts"
-compatibility_date = "2026-03-31"
+export default {
+  async fetch(request, env) {
+    // 1. استخدام D1 لجلب المبيعات
+    const { results } = await env.DB.prepare(
+      "SELECT * FROM sales LIMIT 5"
+    ).all();
 
-[assets]
-directory = "dist"
-binding = "ASSETS"
+    // 2. استخدام R2 لجلب صورة منتج
+    const image = await env.BUCKET.get('product-1.jpg');
 
-[[d1_databases]]
-binding = "DB"
-database_name = "my-nabil-app"
-database_id = "68ab265b-9099-40fd-bef3-26773eb49bc7"
-
-[[r2_buckets]]
-binding = "R2"
-bucket_name = "my-nabil-app"
-
-[vars]
-GITHUB_CLIENT_ID = "Ov23liwZoxgAkFRJrevF"
-GITHUB_CLIENT_SECRET = "e075120d6ef674c3a3ddcb0d8a8e8b5bcaf7419d"
+    return new Response(JSON.stringify(results), {
+      headers: { "Content-Type": "application/json" }
+    });
+  },
+};
