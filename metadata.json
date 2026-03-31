@@ -1,0 +1,5 @@
+{
+  "name": "متجر المنتجات",
+  "description": "تطبيق ويب لإدارة منتجات المتجر والمبيعات والأصناف",
+  "requestFramePermissions": ["camera"]
+}
