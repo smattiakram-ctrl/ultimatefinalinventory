@@ -1,14 +1,20 @@
-{
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "ultimatefinalinventory",
-  "compatibility_date": "2025-09-27",
-  "observability": {
-    "enabled": true
-  },
-  "assets": {
-    "not_found_handling": "single-page-application"
-  },
-  "compatibility_flags": [
-    "nodejs_compat"
-  ]
-}
+name = "akramgoodsfinalver"
+main = "worker.ts"
+compatibility_date = "2026-03-31"
+
+[assets]
+directory = "dist"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "my-nabil-app"
+database_id = "68ab265b-9099-40fd-bef3-26773eb49bc7"
+
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "my-nabil-app"
+
+[vars]
+GITHUB_CLIENT_ID = "Ov23liwZoxgAkFRJrevF"
+GITHUB_CLIENT_SECRET = "e075120d6ef674c3a3ddcb0d8a8e8b5bcaf7419d"
