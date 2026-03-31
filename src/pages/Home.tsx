@@ -1,0 +1,162 @@
+import { useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db';
+import { Link } from 'react-router-dom';
+import { Package, Tags, ShoppingCart, Search, PlusCircle, TrendingUp, AlertTriangle } from 'lucide-react';
+import { startOfDay } from 'date-fns';
+
+export function Home() {
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  const productCount = useLiveQuery(() => db.products.count(), []);
+  const categoryCount = useLiveQuery(() => db.categories.count(), []);
+  
+  const totalSalesAmount = useLiveQuery(async () => {
+    const sales = await db.sales.toArray();
+    return sales.reduce((sum, sale) => sum + sale.sellingPrice, 0);
+  }, []);
+
+  const todaySalesAmount = useLiveQuery(async () => {
+    const today = startOfDay(new Date());
+    const sales = await db.sales.filter(s => s.date >= today).toArray();
+    return sales.reduce((sum, sale) => sum + sale.sellingPrice, 0);
+  }, []);
+
+  const lowStockCount = useLiveQuery(async () => {
+    return await db.products.filter(p => p.quantity !== undefined && p.quantity <= 5).count();
+  }, []);
+  
+  const searchResults = useLiveQuery(
+    () => {
+      if (!searchQuery) return [];
+      return db.products
+        .filter(p => 
+          p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+          (p.barcode && p.barcode.includes(searchQuery))
+        )
+        .limit(10)
+        .toArray();
+    },
+    [searchQuery]
+  );
+
+  return (
+    <div className="space-y-8" dir="rtl">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">نظرة عامة</h1>
+          <p className="text-gray-500 mt-1">مرحباً بك في لوحة تحكم متجرك</p>
+        </div>
+        <div className="flex gap-3">
+          <Link to="/categories" className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition">
+            <PlusCircle size={20} />
+            <span>إضافة صنف</span>
+          </Link>
+          <Link to="/sell" className="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-green-700 transition">
+            <ShoppingCart size={20} />
+            <span>بيع سريع</span>
+          </Link>
+        </div>
+      </header>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+          <div className="bg-blue-100 p-3 rounded-lg text-blue-600">
+            <Package size={24} />
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 font-medium">إجمالي السلع</p>
+            <p className="text-xl font-bold text-gray-900">{productCount ?? 0}</p>
+          </div>
+        </div>
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+          <div className="bg-purple-100 p-3 rounded-lg text-purple-600">
+            <Tags size={24} />
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 font-medium">الأصناف</p>
+            <p className="text-xl font-bold text-gray-900">{categoryCount ?? 0}</p>
+          </div>
+        </div>
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+          <div className="bg-green-100 p-3 rounded-lg text-green-600">
+            <TrendingUp size={24} />
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 font-medium">إجمالي المبيعات</p>
+            <p className="text-xl font-bold text-gray-900">{totalSalesAmount ?? 0} د.ج</p>
+          </div>
+        </div>
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+          <div className="bg-emerald-100 p-3 rounded-lg text-emerald-600">
+            <ShoppingCart size={24} />
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 font-medium">مبيعات اليوم</p>
+            <p className="text-xl font-bold text-gray-900">{todaySalesAmount ?? 0} د.ج</p>
+          </div>
+        </div>
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+          <div className="bg-orange-100 p-3 rounded-lg text-orange-600">
+            <AlertTriangle size={24} />
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 font-medium">سلع منخفضة المخزون</p>
+            <p className="text-xl font-bold text-gray-900">{lowStockCount ?? 0}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Search Section */}
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <h2 className="text-xl font-bold text-gray-900 mb-4">البحث عن السلع</h2>
+        <div className="relative">
+          <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+            <Search className="h-5 w-5 text-gray-400" />
+          </div>
+          <input
+            type="text"
+            className="block w-full pl-3 pr-10 py-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
+            placeholder="ابحث بالاسم أو الباركود..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+
+        {searchQuery && (
+          <div className="mt-4">
+            {searchResults === undefined ? (
+              <p className="text-gray-500 text-center py-4">جاري البحث...</p>
+            ) : searchResults.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">لا توجد نتائج مطابقة</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الاسم</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الباركود</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الكمية</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">السعر (تفصيل)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {searchResults.map((product) => (
+                      <tr key={product.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{product.name}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.barcode || '-'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.quantity || 0}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.retailPrice ? `${product.retailPrice} د.ج` : '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
