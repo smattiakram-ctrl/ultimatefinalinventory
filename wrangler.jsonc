@@ -1,15 +1,22 @@
-export default {
-  async fetch(request, env) {
-    // 1. استخدام D1 لجلب المبيعات
-    const { results } = await env.DB.prepare(
-      "SELECT * FROM sales LIMIT 5"
-    ).all();
-
-    // 2. استخدام R2 لجلب صورة منتج
-    const image = await env.BUCKET.get('product-1.jpg');
-
-    return new Response(JSON.stringify(results), {
-      headers: { "Content-Type": "application/json" }
-    });
+{
+  "name": "ultimatefinalinventory",
+  "main": "worker.ts",
+  "compatibility_date": "2026-03-30",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS"
   },
-};
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "my-nabil-app",
+      "database_id": "68ab265b-9099-40fd-bef3-26773eb49bc7"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "R2",
+      "bucket_name": "my-nabil-app"
+    }
+  ]
+}
