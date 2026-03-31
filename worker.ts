@@ -18,8 +18,19 @@ const json = (data: any, status = 200) =>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 
-const APP_URL = 'https://akramgoodsfinalver.smattiakram.workers.dev';
+const APP_URL = 'https://ultimatefinalinventory.smattiakram.workers.dev';
+```
 
+ثم في GitHub OAuth App غيّر:
+
+- **Homepage URL:**
+```
+https://ultimatefinalinventory.smattiakram.workers.dev
+```
+
+- **Authorization callback URL:**
+```
+https://ultimatefinalinventory.smattiakram.workers.dev/api/auth/callback
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
