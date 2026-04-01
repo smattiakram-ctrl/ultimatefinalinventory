@@ -11,6 +11,7 @@ import { CategoryProducts } from './pages/CategoryProducts';
 import { Sell } from './pages/Sell';
 import { Sales } from './pages/Sales';
 import { AddProduct } from './pages/AddProduct';
+import { LowStock } from './pages/LowStock';
 
 export default function App() {
   return (
@@ -23,6 +24,8 @@ export default function App() {
           <Route path="sell" element={<Sell />} />
           <Route path="sales" element={<Sales />} />
           <Route path="add-product" element={<AddProduct />} />
+<Route path="low-stock" element={<LowStock >} />
+
         </Route>
       </Routes>
     </BrowserRouter>
