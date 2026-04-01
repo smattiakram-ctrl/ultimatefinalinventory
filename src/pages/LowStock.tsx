@@ -9,7 +9,7 @@ export function LowStock() {
 
   useEffect(() => {
     getProducts().then(all => {
-      const low = all.filter(p => p.quantity !== undefined && p.quantity <= 5);
+const low = all.filter(p => p.quantity !== undefined && Number(p.quantity) <= 2);
       setProducts(low);
     });
   }, []);
