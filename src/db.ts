@@ -1,4 +1,6 @@
-// ── Types ──
+/**
+ * ── Types ──
+ */
 export interface Category {
   id?: string;
   name: string;
@@ -26,7 +28,9 @@ export interface Sale {
 
 const API = '/api';
 
-// ── Categories ──
+/**
+ * ── Categories ──
+ */
 export const getCategories = async (): Promise<Category[]> => {
   const res = await fetch(`${API}/categories`);
   return res.json();
@@ -52,7 +56,9 @@ export const deleteCategory = async (id: string): Promise<void> => {
   await fetch(`${API}/categories/${id}`, { method: 'DELETE' });
 };
 
-// ── Products ──
+/**
+ * ── Products ──
+ */
 export const getProducts = async (categoryId?: string): Promise<Product[]> => {
   const url = categoryId ? `${API}/products?categoryId=${categoryId}` : `${API}/products`;
   const res = await fetch(url);
@@ -84,7 +90,9 @@ export const searchProducts = async (query: string): Promise<Product[]> => {
   return res.json();
 };
 
-// ── Sales ──
+/**
+ * ── Sales ──
+ */
 export const getSales = async (query?: string): Promise<Sale[]> => {
   const url = query ? `${API}/sales?q=${encodeURIComponent(query)}` : `${API}/sales`;
   const res = await fetch(url);
@@ -113,11 +121,39 @@ export const getTotalSales = async (): Promise<number> => {
   return data.total || 0;
 };
 
-// ── Image Upload ──
+/**
+ * ── Image Upload ──
+ */
 export const uploadImage = async (file: File): Promise<string | null> => {
   const formData = new FormData();
   formData.append('file', file);
   const res = await fetch(`${API}/upload`, { method: 'POST', body: formData });
   const data = await res.json();
   return data.url || null;
+};
+
+/**
+ * ── Compatibility Bridge (Dexie/Legacy Support) ──
+ * هذا الجزء يضمن عمل الصفحات التي تستورد { db } دون الحاجة لتغيير كودها
+ */
+export const db = {
+  items: {
+    toArray: getProducts,
+    add: addProduct,
+    where: (field: string) => ({
+      equals: (value: any) => ({
+        first: async () => {
+          const items = await searchProducts(value);
+          return items.length > 0 ? items[0] : null;
+        }
+      })
+    })
+  },
+  sales: {
+    toArray: getSales,
+    add: addSale
+  },
+  categories: {
+    toArray: getCategories
+  }
 };
