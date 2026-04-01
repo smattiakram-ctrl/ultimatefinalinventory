@@ -1,54 +1,67 @@
-import React, { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db, Category } from '../db';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Category, getCategories, addCategory, updateCategory, deleteCategory, uploadImage } from '../db';
 import { Link } from 'react-router-dom';
 import { Plus, Image as ImageIcon, Edit, Trash2, Tags } from 'lucide-react';
 
 export function Categories() {
-  const categories = useLiveQuery(() => db.categories.toArray());
+  const [categories, setCategories] = useState<Category[]>([]);
   const [isAdding, setIsAdding] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [image, setImage] = useState<string>('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const loadCategories = useCallback(async () => {
+    const data = await getCategories();
+    setCategories(data);
+  }, []);
+
+  useEffect(() => { loadCategories(); }, [loadCategories]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setImageFile(file);
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setImage(reader.result as string);
-      };
+      reader.onloadend = () => setImage(reader.result as string);
       reader.readAsDataURL(file);
     }
   };
 
   const handleSave = async () => {
     if (!name.trim()) return;
-    
-    if (editingId) {
-      await db.categories.update(editingId, { name, image });
-    } else {
-      await db.categories.add({ name, image });
+    setLoading(true);
+    try {
+      let imageUrl = image;
+      if (imageFile) {
+        const uploaded = await uploadImage(imageFile);
+        if (uploaded) imageUrl = uploaded;
+      }
+      if (editingId) {
+        await updateCategory(editingId, { name, image: imageUrl });
+      } else {
+        await addCategory({ name, image: imageUrl });
+      }
+      await loadCategories();
+      resetForm();
+    } finally {
+      setLoading(false);
     }
-    
-    resetForm();
   };
 
   const handleEdit = (category: Category) => {
     setEditingId(category.id!);
     setName(category.name);
     setImage(category.image || '');
+    setImageFile(null);
     setIsAdding(true);
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('هل أنت متأكد من حذف هذا الصنف؟ سيتم حذف جميع السلع المرتبطة به أيضاً.')) {
-      await db.categories.delete(id);
-      // Delete associated products
-      const products = await db.products.where('categoryId').equals(id).toArray();
-      for (const p of products) {
-        if (p.id) await db.products.delete(p.id);
-      }
+      await deleteCategory(id);
+      await loadCategories();
     }
   };
 
@@ -57,6 +70,7 @@ export function Categories() {
     setEditingId(null);
     setName('');
     setImage('');
+    setImageFile(null);
   };
 
   return (
@@ -64,7 +78,7 @@ export function Categories() {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-900">الأصناف</h1>
         {!isAdding && (
-          <button 
+          <button
             onClick={() => setIsAdding(true)}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition"
           >
@@ -103,24 +117,21 @@ export function Categories() {
                   <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
                 </label>
                 {image && (
-                  <button onClick={() => setImage('')} className="text-red-500 hover:text-red-700 text-sm">
+                  <button onClick={() => { setImage(''); setImageFile(null); }} className="text-red-500 hover:text-red-700 text-sm">
                     إزالة الصورة
                   </button>
                 )}
               </div>
             </div>
             <div className="flex gap-3 pt-4">
-              <button 
+              <button
                 onClick={handleSave}
-                disabled={!name.trim()}
+                disabled={!name.trim() || loading}
                 className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition"
               >
-                حفظ
+                {loading ? 'جاري الحفظ...' : 'حفظ'}
               </button>
-              <button 
-                onClick={resetForm}
-                className="bg-gray-200 text-gray-800 px-6 py-2 rounded-lg hover:bg-gray-300 transition"
-              >
+              <button onClick={resetForm} className="bg-gray-200 text-gray-800 px-6 py-2 rounded-lg hover:bg-gray-300 transition">
                 إلغاء
               </button>
             </div>
@@ -129,7 +140,7 @@ export function Categories() {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-        {categories?.map((category) => (
+        {categories.map((category) => (
           <div key={category.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group">
             <Link to={`/categories/${category.id}`} className="block relative h-48 bg-gray-100">
               {category.image ? (
@@ -146,32 +157,21 @@ export function Categories() {
             <div className="p-4 flex justify-between items-center">
               <h3 className="font-bold text-gray-900 text-lg truncate">{category.name}</h3>
               <div className="flex gap-2">
-                <button 
-                  onClick={() => handleEdit(category)}
-                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                  title="تعديل"
-                >
+                <button onClick={() => handleEdit(category)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition">
                   <Edit size={18} />
                 </button>
-                <button 
-                  onClick={() => handleDelete(category.id!)}
-                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                  title="حذف"
-                >
+                <button onClick={() => handleDelete(category.id!)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition">
                   <Trash2 size={18} />
                 </button>
               </div>
             </div>
           </div>
         ))}
-        {categories?.length === 0 && !isAdding && (
+        {categories.length === 0 && !isAdding && (
           <div className="col-span-full text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
             <Tags size={48} className="mx-auto text-gray-300 mb-4" />
             <p className="text-gray-500 text-lg">لا توجد أصناف حالياً</p>
-            <button 
-              onClick={() => setIsAdding(true)}
-              className="mt-4 text-blue-600 font-medium hover:underline"
-            >
+            <button onClick={() => setIsAdding(true)} className="mt-4 text-blue-600 font-medium hover:underline">
               أضف صنفك الأول
             </button>
           </div>
