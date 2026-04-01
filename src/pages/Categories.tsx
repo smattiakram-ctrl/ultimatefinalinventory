@@ -1,16 +1,15 @@
 import React, { useState } from 'react';
-/**
- * تم تعديل الاستيراد ليكون متوافقاً مع المسار الصحيح لملف db.ts في مشروعك.
- * نستخدم هنا useLiveQuery المخصص الذي أنشأناه في ملف db لضمان التوافق مع السحابة.
- */
-import { useLiveQuery, db, Category } from '../db';
+// استخدام الخطاف المخصص من ملف db الخاص بنا بدلاً من المكتبة الخارجية مباشرة لتجنب أخطاء المسارات
+import { db, Category, useLiveQuery } from '../db'; 
 import { Link } from 'react-router-dom';
-import { Plus, Image as ImageIcon, Edit, Trash2, Tags } from 'lucide-react';
+import { Plus, Image as ImageIcon, Edit, Trash2, Tags, Loader2, ChevronLeft } from 'lucide-react';
 
 export function Categories() {
-  // جلب الأصناف من قاعدة البيانات السحابية
-  const categories = useLiveQuery(() => db.categories.toArray());
+  // استخدام useLiveQuery الممرر من ملف db.ts الخاص بك
+  const categories = useLiveQuery(() => db.categories.toArray(), []);
+  
   const [isAdding, setIsAdding] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [image, setImage] = useState<string>('');
@@ -18,6 +17,10 @@ export function Categories() {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 1024 * 1024) {
+        // تنبيه بسيط لحجم الصورة
+        return;
+      }
       const reader = new FileReader();
       reader.onloadend = () => {
         setImage(reader.result as string);
@@ -29,17 +32,30 @@ export function Categories() {
   const handleSave = async () => {
     if (!name.trim()) return;
     
-    if (editingId) {
-      await db.categories.update(editingId, { name, image });
-    } else {
-      await db.categories.add({ name, image });
+    setIsSaving(true);
+    try {
+      if (editingId) {
+        // تحديث صنف موجود في Firestore
+        await db.categories.update(editingId, { 
+          name: name.trim(), 
+          image: image || '' 
+        });
+      } else {
+        // إضافة صنف جديد في Firestore
+        await db.categories.add({ 
+          name: name.trim(), 
+          image: image || '' 
+        });
+      }
+      resetForm();
+    } catch (error) {
+      console.error("فشل الحفظ في قاعدة البيانات:", error);
+    } finally {
+      setIsSaving(false);
     }
-    
-    resetForm();
   };
 
   const handleEdit = (category: Category) => {
-    // نستخدم id كـ string للتوافق مع بنية المعرفات الفريدة (UUID)
     setEditingId(category.id || null);
     setName(category.name);
     setImage(category.image || '');
@@ -47,12 +63,11 @@ export function Categories() {
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('هل أنت متأكد من حذف هذا الصنف؟ سيتم حذف جميع السلع المرتبطة به أيضاً.')) {
-      await db.categories.delete(id);
-      // حذف المنتجات المرتبطة بهذا الصنف
-      const products = await db.products.where('categoryId').equals(id).toArray();
-      for (const p of products) {
-        if (p.id) await db.products.delete(p.id);
+    if (window.confirm('هل أنت متأكد من حذف هذا الصنف؟')) {
+      try {
+        await db.categories.delete(id);
+      } catch (error) {
+        console.error("فشل عملية الحذف:", error);
       }
     }
   };
@@ -62,106 +77,127 @@ export function Categories() {
     setEditingId(null);
     setName('');
     setImage('');
+    setIsSaving(false);
   };
 
   return (
-    <div className="space-y-6" dir="rtl">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">الأصناف</h1>
+    <div className="max-w-7xl mx-auto px-4 py-6" dir="rtl">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-3xl font-extrabold text-gray-900 flex items-center gap-3">
+            <Tags className="text-blue-600" size={32} />
+            الأصناف
+          </h1>
+          <p className="text-gray-500 mt-1 text-sm">إدارة وتصنيف المنتجات في متجرك السحابي</p>
+        </div>
+        
         {!isAdding && (
           <button 
             onClick={() => setIsAdding(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95"
           >
             <Plus size={20} />
-            <span>إضافة صنف</span>
+            <span className="font-bold">إضافة صنف جديد</span>
           </button>
         )}
       </div>
 
       {isAdding && (
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <h2 className="text-lg font-bold mb-4">{editingId ? 'تعديل الصنف' : 'إضافة صنف جديد'}</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">اسم الصنف</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder="مثال: إلكترونيات، ملابس..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">صورة الصنف (اختياري)</label>
-              <div className="flex items-center gap-4">
-                {image ? (
-                  <img src={image} alt="Preview" className="w-20 h-20 object-cover rounded-lg border" />
-                ) : (
-                  <div className="w-20 h-20 bg-gray-100 rounded-lg border flex items-center justify-center text-gray-400">
-                    <ImageIcon size={32} />
-                  </div>
-                )}
-                <label className="cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition">
-                  اختر صورة
-                  <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-                </label>
-                {image && (
-                  <button onClick={() => setImage('')} className="text-red-500 hover:text-red-700 text-sm">
-                    إزالة الصورة
-                  </button>
-                )}
+        <div className="bg-white p-6 rounded-2xl shadow-xl border border-blue-50 mb-8">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-bold text-gray-800">
+              {editingId ? 'تعديل بيانات الصنف' : 'بيانات الصنف الجديد'}
+            </h2>
+            <button onClick={resetForm} className="text-gray-400 hover:text-gray-600">
+              إغلاق
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-5">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">اسم الصنف</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all text-right"
+                  placeholder="مثال: إلكترونيات..."
+                  disabled={isSaving}
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button 
+                  onClick={handleSave}
+                  disabled={!name.trim() || isSaving}
+                  className="flex-1 bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-all font-bold flex items-center justify-center gap-2"
+                >
+                  {isSaving ? <Loader2 className="animate-spin" size={20} /> : (editingId ? 'تحديث' : 'حفظ')}
+                </button>
+                <button 
+                  onClick={resetForm}
+                  disabled={isSaving}
+                  className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 transition-all font-medium"
+                >
+                  إلغاء
+                </button>
               </div>
             </div>
-            <div className="flex gap-3 pt-4">
-              <button 
-                onClick={handleSave}
-                disabled={!name.trim()}
-                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition"
-              >
-                حفظ
-              </button>
-              <button 
-                onClick={resetForm}
-                className="bg-gray-200 text-gray-800 px-6 py-2 rounded-lg hover:bg-gray-300 transition"
-              >
-                إلغاء
-              </button>
+
+            <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-100 rounded-2xl p-4 bg-gray-50/50">
+              <div className="relative group">
+                {image ? (
+                  <div className="relative">
+                    <img src={image} alt="Preview" className="w-32 h-32 object-cover rounded-2xl border-4 border-white shadow-md" />
+                    <button 
+                      onClick={() => setImage('')}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white p-1.5 rounded-full shadow-lg"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-32 h-32 bg-white rounded-2xl border border-gray-200 flex flex-col items-center justify-center text-gray-400 gap-2">
+                    <ImageIcon size={32} />
+                    <span className="text-[10px]">لا توجد صورة</span>
+                  </div>
+                )}
+              </div>
+              <label className="mt-4 cursor-pointer text-blue-600 text-sm font-bold hover:underline">
+                اختر صورة
+                <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={isSaving} />
+              </label>
             </div>
           </div>
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {categories?.map((category) => (
-          <div key={category.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group">
-            <Link to={`/categories/${category.id}`} className="block relative h-48 bg-gray-100">
+          <div key={category.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden group hover:shadow-xl transition-all duration-300">
+            <Link to={`/categories/${category.id}`} className="block relative h-40 bg-gray-50 overflow-hidden">
               {category.image ? (
-                <img src={category.image} alt={category.name} className="w-full h-full object-cover" />
+                <img src={category.image} alt={category.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-gray-400">
+                <div className="w-full h-full flex items-center justify-center text-gray-200">
                   <Tags size={48} />
                 </div>
               )}
-              <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                <span className="text-white font-medium bg-black/50 px-4 py-2 rounded-full">عرض السلع</span>
-              </div>
             </Link>
-            <div className="p-4 flex justify-between items-center">
-              <h3 className="font-bold text-gray-900 text-lg truncate">{category.name}</h3>
-              <div className="flex gap-2">
+            
+            <div className="p-4 flex items-center justify-between">
+              <h3 className="font-bold text-gray-800 text-lg truncate flex-1">{category.name}</h3>
+              <div className="flex gap-1">
                 <button 
                   onClick={() => handleEdit(category)}
-                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                  title="تعديل"
+                  className="p-2 text-blue-500 hover:bg-blue-50 rounded-xl transition-colors"
                 >
                   <Edit size={18} />
                 </button>
                 <button 
                   onClick={() => handleDelete(category.id!)}
-                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                  title="حذف"
+                  className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-colors"
                 >
                   <Trash2 size={18} />
                 </button>
@@ -169,19 +205,9 @@ export function Categories() {
             </div>
           </div>
         ))}
-        {categories?.length === 0 && !isAdding && (
-          <div className="col-span-full text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
-            <Tags size={48} className="mx-auto text-gray-300 mb-4" />
-            <p className="text-gray-500 text-lg">لا توجد أصناف حالياً</p>
-            <button 
-              onClick={() => setIsAdding(true)}
-              className="mt-4 text-blue-600 font-medium hover:underline"
-            >
-              أضف صنفك الأول
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
 }
+
+export default Categories;
