@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 /**
  * ملاحظة هامة: تم تعديل المسار ليتناسب مع هيكلة مشروعك.
  * إذا كان ملف db.ts موجوداً في المجلد الأب (src)، فإن الاستيراد من '../db' صحيح.
