@@ -23,40 +23,42 @@ useEffect(() => {
   // جلب الأصناف
   getCategories().then(categories => setCategoryCount(categories.length));
 }, []);
-  // حساب إجمالي المبيعات
-  const totalSalesAmount = useLiveQuery(async () => {
-    const sales = await db.sales.toArray();
-    return sales.reduce((sum, sale) => sum + (sale.sellingPrice || 0), 0);
-  }, []);
+const [totalSalesAmount, setTotalSalesAmount] = useState(0);
+const [todaySalesAmount, setTodaySalesAmount] = useState(0);
+const [lowStockCount, setLowStockCount] = useState(0);
+const [searchResults, setSearchResults] = useState<Product[]>([]);
 
-  // حساب مبيعات اليوم
-  const todaySalesAmount = useLiveQuery(async () => {
-    const today = startOfDay(new Date()).toISOString();
-    const sales = await db.sales.filter(s => s.date >= today).toArray();
-    return sales.reduce((sum, sale) => sum + (sale.sellingPrice || 0), 0);
-  }, []);
+useEffect(() => {
+  // إجمالي المبيعات
+  getSales().then(sales => {
+    const total = sales.reduce((sum, sale) => sum + (sale.sellingPrice || 0), 0);
+    setTotalSalesAmount(total);
 
-  // حساب المنتجات منخفضة المخزون
-  const lowStockCount = useLiveQuery(async () => {
-    return await db.products.filter(p => p.quantity !== undefined && p.quantity <= 5).count();
-  }, []);
-  
-  // منطق البحث السحابي
-  const searchResults = useLiveQuery(
-    async () => {
-      if (!searchQuery) return [];
-      const query = searchQuery.toLowerCase();
-      const results = await db.products
-        .filter(p => 
-          p.name.toLowerCase().includes(query) || 
-          (p.barcode && p.barcode.includes(query))
-        )
-        .limit(10)
-        .toArray();
-      return results;
-    },
-    [searchQuery]
-  );
+    // مبيعات اليوم
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // بداية اليوم
+    const todayTotal = sales
+      .filter(sale => new Date(sale.date) >= today)
+      .reduce((sum, sale) => sum + (sale.sellingPrice || 0), 0);
+    setTodaySalesAmount(todayTotal);
+  });
+
+  // المنتجات منخفضة المخزون
+  getProducts().then(products => {
+    const lowStock = products.filter(p => p.quantity !== undefined && p.quantity <= 5).length;
+    setLowStockCount(lowStock);
+  });
+}, []);
+
+// البحث السحابي
+useEffect(() => {
+  if (!searchQuery) {
+    setSearchResults([]);
+    return;
+  }
+
+  searchProducts(searchQuery).then(results => setSearchResults(results));
+}, [searchQuery]);
 
   return (
     <div className="space-y-8" dir="rtl">
