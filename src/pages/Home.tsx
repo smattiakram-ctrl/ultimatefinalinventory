@@ -4,11 +4,11 @@ import { useState, useEffect } from 'react';
  * إذا كان ملف db.ts موجوداً في المجلد الأب (src)، فإن الاستيراد من '../db' صحيح.
  * تم التأكد من أن جميع الوظائف السحابية تعمل من خلال هذا الاستدعاء.
  */
-import { getCategories, getProducts } from "../db";
+import { useState, useEffect } from 'react';
+import { getCategories, getProducts, getSales, searchProducts } from '../db';
 import { Link } from 'react-router-dom';
 import { Package, Tags, ShoppingCart, Search, PlusCircle, TrendingUp, AlertTriangle } from 'lucide-react';
 import { startOfDay } from 'date-fns';
-
 export function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   
