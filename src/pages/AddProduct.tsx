@@ -49,7 +49,6 @@ export function AddProduct() {
   false
 );
         (error) => { console.warn(error); }
-      );
     }, 100);
   };
 
