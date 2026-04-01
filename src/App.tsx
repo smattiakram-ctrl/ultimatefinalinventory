@@ -24,7 +24,7 @@ export default function App() {
           <Route path="sell" element={<Sell />} />
           <Route path="sales" element={<Sales />} />
           <Route path="add-product" element={<AddProduct />} />
-<Route path="low-stock" element={<LowStock >} />
+<Route path="low-stock" element={<LowStock />} />
 
         </Route>
       </Routes>
