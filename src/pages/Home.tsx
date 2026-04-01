@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
  * إذا كان ملف db.ts موجوداً في المجلد الأب (src)، فإن الاستيراد من '../db' صحيح.
  * تم التأكد من أن جميع الوظائف السحابية تعمل من خلال هذا الاستدعاء.
  */
+import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { getCategories, getProducts, getSales, searchProducts } from '../db';
 import { Link } from 'react-router-dom';
@@ -59,6 +60,8 @@ useEffect(() => {
 
   searchProducts(searchQuery).then(results => setSearchResults(results));
 }, [searchQuery]);
+export function Home() {
+  const navigate = useNavigate(); 
 
   return (
     <div className="space-y-8" dir="rtl">
