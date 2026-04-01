@@ -26,7 +26,6 @@ useEffect(() => {
     setTotalSalesAmount(total);
     });
   }, []); 
-}
 
     // مبيعات اليوم
     const today = new Date();
