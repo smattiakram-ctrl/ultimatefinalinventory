@@ -4,7 +4,8 @@ import { getCategories, getProducts, getSales, searchProducts } from '../db';
 import { Package, Tags, ShoppingCart, Search, PlusCircle, TrendingUp, AlertTriangle } from 'lucide-react';
 import { startOfDay } from 'date-fns';
   // جلب إحصائيات المنتجات والأصناف سحابياً
-  const [productCount, setProductCount] = useState(0);
+export function Home() { 
+const [productCount, setProductCount] = useState(0);
 const [categoryCount, setCategoryCount] = useState(0);
 
 useEffect(() => {
