@@ -89,13 +89,13 @@ export function Home() {
             <p className="text-xl font-bold text-gray-900">{todaySalesAmount} د.ج</p>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
-          <div className="bg-orange-100 p-3 rounded-lg text-orange-600"><AlertTriangle size={24} /></div>
-          <div>
-            <p className="text-xs text-gray-500 font-medium">سلع منخفضة المخزون</p>
-            <p className="text-xl font-bold text-gray-900">{lowStockCount}</p>
-          </div>
-        </div>
+<Link to="/low-stock" className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4 hover:bg-orange-50 transition cursor-pointer">
+  <div className="bg-orange-100 p-3 rounded-lg text-orange-600"><AlertTriangle size={24} /></div>
+  <div>
+    <p className="text-xs text-gray-500 font-medium">سلع منخفضة المخزون</p>
+    <p className="text-xl font-bold text-gray-900">{lowStockCount}</p>
+  </div>
+</Link>
       </div>
 
       {/* قسم البحث */}
