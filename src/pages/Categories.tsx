@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Image as ImageIcon, Edit, Trash2, Tags, Loader2, ChevronLeft, AlertCircle } from 'lucide-react';
+import { Plus, Image as ImageIcon, Edit, Trash2, Tags, X, Save, Loader2, AlertCircle } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, 
@@ -10,7 +10,8 @@ import {
   updateDoc, 
   deleteDoc, 
   onSnapshot, 
-  query 
+  query,
+  orderBy 
 } from 'firebase/firestore';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 
@@ -63,25 +64,27 @@ export function Categories() {
     return () => unsubscribe();
   }, []);
 
-  // 2. جلب البيانات (Real-time Fetching)
+  // 2. جلب البيانات من السحاب (Real-time Fetching)
   useEffect(() => {
     if (!user) return;
 
-    const q = collection(db, 'artifacts', appId, 'public', 'data', 'categories');
+    // جلب البيانات من المسار المحدد في القواعد
+    const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'categories');
     
-    const unsubscribe = onSnapshot(q, 
+    const unsubscribe = onSnapshot(colRef, 
       (snapshot) => {
         const items = snapshot.docs.map(doc => ({ 
           id: doc.id, 
           ...doc.data() 
         })) as Category[];
-        // ترتيب الأصناف حسب تاريخ الإضافة (الأحدث أولاً)
+        
+        // ترتيب البيانات يدوياً (الأحدث أولاً)
         setCategories(items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
         setLoading(false);
       }, 
       (err) => {
         console.error("Firestore error:", err);
-        setError("تعذر تحميل البيانات من السحابة");
+        setError("فشل الاتصال بالسحاب. تأكد من إعدادات الوصول.");
         setLoading(false);
       }
     );
@@ -126,7 +129,7 @@ export function Categories() {
       resetForm();
     } catch (err) {
       console.error("Save error:", err);
-      setError("حدث خطأ أثناء محاولة الحفظ");
+      setError("حدث خطأ أثناء محاولة الحفظ السحابي");
     } finally {
       setIsSaving(false);
     }
@@ -147,7 +150,7 @@ export function Categories() {
       await deleteDoc(docRef);
     } catch (err) {
       console.error("Delete error:", err);
-      alert("تعذر حذف الصنف");
+      alert("فشل في حذف الصنف من السحاب");
     }
   };
 
@@ -163,19 +166,19 @@ export function Categories() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 font-sans" dir="rtl">
       {/* الرأس */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 text-right">
         <div>
-          <h1 className="text-3xl font-extrabold text-gray-900 flex items-center gap-3">
+          <h1 className="text-3xl font-black text-gray-900 flex items-center gap-3">
             <Tags className="text-blue-600" size={32} />
-            الأصناف
+            أصناف المنتجات
           </h1>
-          <p className="text-gray-500 mt-1 text-sm">إدارة وتصنيف المنتجات في متجرك السحابي</p>
+          <p className="text-gray-500 mt-1 text-sm">إدارة السلع وتصنيفها سحابياً</p>
         </div>
         
         {!isAdding && (
           <button 
             onClick={() => setIsAdding(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-xl active:scale-95"
           >
             <Plus size={20} />
             <span className="font-bold">إضافة صنف جديد</span>
@@ -184,74 +187,74 @@ export function Categories() {
       </div>
 
       {error && (
-        <div className="bg-red-50 text-red-600 p-4 rounded-xl mb-6 flex items-center gap-3 border border-red-100">
+        <div className="bg-red-50 text-red-600 p-4 rounded-2xl mb-6 flex items-center gap-3 border border-red-100">
           <AlertCircle size={20} />
-          <p>{error}</p>
+          <p className="font-bold">{error}</p>
         </div>
       )}
 
-      {/* نموذج الإضافة/التعديل */}
+      {/* نموذج الإضافة والتعديل */}
       {isAdding && (
-        <div className="bg-white p-6 rounded-2xl shadow-xl border border-blue-50 mb-8 animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-gray-800">
-              {editingId ? 'تعديل بيانات الصنف' : 'بيانات الصنف الجديد'}
+        <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl border border-blue-50 mb-10 animate-in fade-in slide-in-from-top-4 duration-300 text-right">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-2xl font-black text-gray-800">
+              {editingId ? 'تحديث الصنف' : 'صنف جديد'}
             </h2>
-            <button onClick={resetForm} className="text-gray-400 hover:text-gray-600">إلغاء</button>
+            <button onClick={resetForm} className="text-gray-400 hover:text-red-500 transition-colors">
+              <X size={28} />
+            </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+            <div className="space-y-6">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2 text-right">اسم الصنف</label>
+                <label className="block text-sm font-black text-gray-700 mb-2">اسم الصنف</label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all text-right"
-                  placeholder="مثال: إلكترونيات، ملابس..."
+                  className="w-full p-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:ring-0 focus:border-blue-500 outline-none transition-all font-bold text-lg"
+                  placeholder="مثال: مشروبات، منظفات..."
                   disabled={isSaving}
                 />
               </div>
 
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-4 pt-2">
                 <button 
                   onClick={handleSave}
                   disabled={!name.trim() || isSaving}
-                  className="flex-1 bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-all font-bold flex items-center justify-center gap-2"
+                  className="flex-1 bg-blue-600 text-white py-4 rounded-2xl hover:bg-blue-700 disabled:opacity-50 transition-all font-black text-lg flex items-center justify-center gap-2 shadow-lg shadow-blue-100"
                 >
-                  {isSaving ? <Loader2 className="animate-spin" size={20} /> : (editingId ? 'تحديث' : 'حفظ')}
+                  {isSaving ? <Loader2 className="animate-spin" size={24} /> : (editingId ? 'تحديث البيانات' : 'حفظ في السحاب')}
                 </button>
                 <button 
                   onClick={resetForm}
-                  className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 transition-all font-medium"
+                  className="px-8 py-4 bg-gray-100 text-gray-600 rounded-2xl hover:bg-gray-200 transition-all font-bold"
                 >
                   تراجع
                 </button>
               </div>
             </div>
 
-            <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-100 rounded-2xl p-4 bg-gray-50/50">
-              <div className="relative group">
-                {image ? (
-                  <div className="relative">
-                    <img src={image} alt="Preview" className="w-32 h-32 object-cover rounded-2xl border-4 border-white shadow-md" />
-                    <button 
-                      onClick={() => setImage('')}
-                      className="absolute -top-2 -right-2 bg-red-500 text-white p-1.5 rounded-full shadow-lg"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="w-32 h-32 bg-white rounded-2xl border border-gray-200 flex flex-col items-center justify-center text-gray-400 gap-2">
-                    <ImageIcon size={32} />
-                    <span className="text-[10px]">لا توجد صورة</span>
-                  </div>
-                )}
-              </div>
-              <label className="mt-4 cursor-pointer text-blue-600 text-sm font-bold hover:underline">
-                اختر صورة
+            <div className="flex flex-col items-center justify-center border-4 border-dashed border-gray-100 rounded-[2rem] p-6 bg-gray-50/50 group relative">
+              {image ? (
+                <div className="relative w-40 h-40">
+                  <img src={image} alt="Preview" className="w-full h-full object-cover rounded-3xl border-4 border-white shadow-xl" />
+                  <button 
+                    onClick={() => setImage('')}
+                    className="absolute -top-3 -right-3 bg-red-500 text-white p-2 rounded-full shadow-lg hover:scale-110 transition-transform"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ) : (
+                <div className="w-40 h-40 bg-white rounded-3xl border border-gray-200 flex flex-col items-center justify-center text-gray-300 gap-3">
+                  <ImageIcon size={48} />
+                  <span className="text-xs font-bold uppercase tracking-widest text-gray-400">بدون صورة</span>
+                </div>
+              )}
+              <label className="mt-6 cursor-pointer bg-white px-6 py-2 rounded-full text-blue-600 text-sm font-black border border-blue-100 hover:bg-blue-600 hover:text-white transition-all shadow-sm">
+                تحميل صورة
                 <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={isSaving} />
               </label>
             </div>
@@ -259,35 +262,38 @@ export function Categories() {
         </div>
       )}
 
-      {/* عرض الأصناف */}
+      {/* عرض القائمة */}
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-20">
-          <Loader2 className="animate-spin text-blue-600 mb-4" size={40} />
-          <p className="text-gray-500">جاري جلب الأصناف من السحابة...</p>
+        <div className="flex flex-col items-center justify-center py-24 bg-white rounded-[3rem] shadow-sm">
+          <Loader2 className="animate-spin text-blue-600 mb-4" size={50} />
+          <p className="text-gray-400 font-bold">جاري مزامنة بياناتك مع السحاب...</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
           {categories.map((category) => (
-            <div key={category.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden group hover:shadow-xl transition-all duration-300">
-              <Link to={`/categories/${category.id}`} className="block relative h-40 bg-gray-50 overflow-hidden">
+            <div key={category.id} className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden group hover:shadow-2xl transition-all duration-500 hover:-translate-y-2">
+              <Link to={`/categories/${category.id}`} className="block relative h-48 bg-gray-50 overflow-hidden">
                 {category.image ? (
-                  <img src={category.image} alt={category.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                  <img src={category.image} alt={category.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-200">
-                    <Tags size={48} />
+                  <div className="w-full h-full flex items-center justify-center text-gray-100 bg-gradient-to-br from-gray-50 to-gray-100">
+                    <Tags size={60} />
                   </div>
                 )}
-                <div className="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-all"></div>
+                <div className="absolute inset-0 bg-black/5 group-hover:bg-black/0 transition-all"></div>
+                <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-md px-4 py-1.5 rounded-full text-blue-600 text-[10px] font-black opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-tighter">
+                  استكشاف المنتجات
+                </div>
               </Link>
               
-              <div className="p-4 flex items-center justify-between">
-                <h3 className="font-bold text-gray-800 text-lg truncate flex-1 text-right">{category.name}</h3>
-                <div className="flex gap-1">
-                  <button onClick={() => handleEdit(category)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-xl transition-colors">
-                    <Edit size={18} />
+              <div className="p-6 flex items-center justify-between">
+                <h3 className="font-black text-gray-900 text-xl truncate flex-1 text-right">{category.name}</h3>
+                <div className="flex gap-2">
+                  <button onClick={() => handleEdit(category)} className="p-3 text-blue-500 hover:bg-blue-50 rounded-2xl transition-colors">
+                    <Edit size={20} />
                   </button>
-                  <button onClick={() => handleDelete(category.id!)} className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-colors">
-                    <Trash2 size={18} />
+                  <button onClick={() => handleDelete(category.id!)} className="p-3 text-red-500 hover:bg-red-50 rounded-2xl transition-colors">
+                    <Trash2 size={20} />
                   </button>
                 </div>
               </div>
@@ -295,15 +301,15 @@ export function Categories() {
           ))}
 
           {categories.length === 0 && !isAdding && (
-            <div className="col-span-full py-20 flex flex-col items-center justify-center bg-white rounded-3xl border-2 border-dashed border-gray-100">
-              <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-                <Tags size={48} className="text-gray-200" />
+            <div className="col-span-full py-24 flex flex-col items-center justify-center bg-white rounded-[4rem] border-4 border-dashed border-gray-50">
+              <div className="w-32 h-32 bg-blue-50 rounded-full flex items-center justify-center mb-6">
+                <Tags size={60} className="text-blue-200" />
               </div>
-              <h2 className="text-xl font-bold text-gray-800">قائمة الأصناف فارغة</h2>
-              <p className="text-gray-500 mt-2 mb-6 text-center">ابدأ بإضافة أصناف لترتيب منتجاتك بشكل أفضل في السحاب</p>
+              <h2 className="text-3xl font-black text-gray-900">المتجر السحابي فارغ</h2>
+              <p className="text-gray-400 mt-3 mb-8 text-center max-w-sm font-medium">ابدأ الآن بإضافة أول صنف لترتيب منتجاتك ومزامنتها عبر جميع أجهزتك</p>
               <button 
                 onClick={() => setIsAdding(true)}
-                className="bg-blue-600 text-white px-8 py-3 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg"
+                className="bg-blue-600 text-white px-10 py-4 rounded-3xl font-black text-lg hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 active:scale-95"
               >
                 أضف أول صنف الآن
               </button>
