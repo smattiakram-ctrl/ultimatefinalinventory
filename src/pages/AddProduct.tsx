@@ -41,12 +41,13 @@ export function AddProduct() {
   { 
     fps: 10, 
     qrbox: { width: 250, height: 250 },
-    // إضافة هذا السطر لإجبار الكاميرا الخلفية
+    // نستخدم التفضيل بدلاً من الإجبار المطلق لتجنب الخطأ
     videoConstraints: {
-      facingMode: { ideal: "environment" }
+      facingMode: "environment" 
     }
   }, 
-  false);
+  false
+);
         (error) => { console.warn(error); }
       );
     }, 100);
