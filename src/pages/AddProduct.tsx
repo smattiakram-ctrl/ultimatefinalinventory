@@ -36,10 +36,17 @@ export function AddProduct() {
   const startScanner = () => {
     setIsScanning(true);
     setTimeout(() => {
-      const newScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: { width: 250, height: 250 } }, false);
-      setScanner(newScanner);
-      newScanner.render(
-        (decodedText) => { setBarcode(decodedText); newScanner.clear(); setIsScanning(false); },
+      const newScanner = new Html5QrcodeScanner(
+  "reader", 
+  { 
+    fps: 10, 
+    qrbox: { width: 250, height: 250 },
+    // إضافة هذا السطر لإجبار الكاميرا الخلفية
+    videoConstraints: {
+      facingMode: { ideal: "environment" }
+    }
+  }, 
+  false);
         (error) => { console.warn(error); }
       );
     }, 100);
