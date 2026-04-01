@@ -73,7 +73,7 @@ export function Home() {
         <div className="flex gap-3">
           <Link to="/categories" className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition">
             <PlusCircle size={20} />
-            <span>المخزون</span>
+            <span>المخزن</span>
           </Link>
           <Link to="/sell" className="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-green-700 transition">
             <ShoppingCart size={20} />
