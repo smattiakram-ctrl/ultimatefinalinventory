@@ -32,6 +32,11 @@ export interface Sale {
 const API = '/api';
 
 /**
+ * نظام إشعارات داخلي لتحديث الواجهات عند تغيير البيانات
+ */
+const notifyChange = () => window.dispatchEvent(new CustomEvent('db-change'));
+
+/**
  * ── Categories ──
  * وظائف التعامل مع التصنيفات عبر السحاب
  */
@@ -46,6 +51,7 @@ export const addCategory = async (category: Omit<Category, 'id'>): Promise<void>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ...category, id: Date.now().toString() }),
   });
+  notifyChange();
 };
 
 export const updateCategory = async (id: string, data: Partial<Category>): Promise<void> => {
@@ -54,10 +60,12 @@ export const updateCategory = async (id: string, data: Partial<Category>): Promi
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
+  notifyChange();
 };
 
 export const deleteCategory = async (id: string): Promise<void> => {
   await fetch(`${API}/categories/${id}`, { method: 'DELETE' });
+  notifyChange();
 };
 
 /**
@@ -76,6 +84,7 @@ export const addProduct = async (product: Omit<Product, 'id'>): Promise<void> =>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ...product, id: Date.now().toString() }),
   });
+  notifyChange();
 };
 
 export const updateProduct = async (id: string, data: Partial<Product>): Promise<void> => {
@@ -84,10 +93,12 @@ export const updateProduct = async (id: string, data: Partial<Product>): Promise
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
+  notifyChange();
 };
 
 export const deleteProduct = async (id: string): Promise<void> => {
   await fetch(`${API}/products/${id}`, { method: 'DELETE' });
+  notifyChange();
 };
 
 export const searchProducts = async (query: string): Promise<Product[]> => {
@@ -97,7 +108,6 @@ export const searchProducts = async (query: string): Promise<Product[]> => {
 
 /**
  * ── Sales ──
- * وظائف التعامل مع المبيعات عبر السحاب
  */
 export const getSales = async (query?: string): Promise<Sale[]> => {
   const url = query ? `${API}/sales?q=${encodeURIComponent(query)}` : `${API}/sales`;
@@ -111,14 +121,17 @@ export const addSale = async (sale: Omit<Sale, 'id'>): Promise<void> => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ...sale, id: Date.now().toString() }),
   });
+  notifyChange();
 };
 
 export const deleteSale = async (id: string): Promise<void> => {
   await fetch(`${API}/sales/${id}`, { method: 'DELETE' });
+  notifyChange();
 };
 
 export const clearSales = async (): Promise<void> => {
   await fetch(`${API}/sales`, { method: 'DELETE' });
+  notifyChange();
 };
 
 export const getTotalSales = async (): Promise<number> => {
@@ -144,11 +157,12 @@ export const uploadImage = async (file: File): Promise<string | null> => {
 };
 
 /**
- * ── Build Fix: useLiveQuery Mock ──
- * هذا الجزء يحل مشكلة الخطأ في الـ Build لغياب مكتبة dexie-react-hooks
+ * ── useLiveQuery ──
+ * تحديث تلقائي للواجهة عند حدوث أي تغيير في قاعدة البيانات
  */
 export function useLiveQuery<T>(querier: () => Promise<T> | T, deps: any[] = []): T | undefined {
   const [result, setResult] = useState<T>();
+  const [refreshToggle, setRefreshToggle] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -160,18 +174,53 @@ export function useLiveQuery<T>(querier: () => Promise<T> | T, deps: any[] = [])
         console.error("Cloud Data Error:", e);
       }
     };
+
     runQuery();
-    return () => { isMounted = false; };
-  }, deps);
+
+    const handleUpdate = () => runQuery();
+    window.addEventListener('db-change', handleUpdate);
+    
+    return () => { 
+      isMounted = false; 
+      window.removeEventListener('db-change', handleUpdate);
+    };
+  }, [...deps, refreshToggle]);
 
   return result;
 }
 
 /**
  * ── Compatibility Bridge (Dexie Legacy Support) ──
- * هذا الجزء يضمن عمل الصفحات التي تستخدم كائن db القديم دون تعديلها
+ * دعم كامل لجميع الوظائف المطلوبة في ملفات Categories.tsx و Home.tsx
  */
 export const db = {
+  categories: {
+    toArray: getCategories,
+    add: addCategory,
+    update: updateCategory,
+    delete: deleteCategory,
+    count: async () => (await getCategories()).length
+  },
+  products: {
+    toArray: getProducts,
+    add: addProduct,
+    update: updateProduct,
+    delete: deleteProduct,
+    count: async () => (await getProducts()).length,
+    filter: (fn: (p: Product) => boolean) => ({
+      count: async () => (await getProducts()).filter(fn).length,
+      toArray: async () => (await getProducts()).filter(fn)
+    })
+  },
+  sales: {
+    toArray: getSales,
+    add: addSale,
+    delete: deleteSale,
+    filter: (fn: (s: Sale) => boolean) => ({
+      toArray: async () => (await getSales()).filter(fn)
+    })
+  },
+  // لدعم البحث القديم في بعض الصفحات
   items: {
     toArray: getProducts,
     add: addProduct,
@@ -183,16 +232,5 @@ export const db = {
         }
       })
     })
-  },
-  products: {
-    toArray: getProducts,
-    add: addProduct
-  },
-  sales: {
-    toArray: getSales,
-    add: addSale
-  },
-  categories: {
-    toArray: getCategories
   }
 };
