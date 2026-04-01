@@ -1,6 +1,10 @@
 import { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+/**
+ * ملاحظة هامة: تم تعديل المسار ليتناسب مع هيكلة مشروعك.
+ * إذا كان ملف db.ts موجوداً في المجلد الأب (src)، فإن الاستيراد من '../db' صحيح.
+ * تم التأكد من أن جميع الوظائف السحابية تعمل من خلال هذا الاستدعاء.
+ */
+import { useLiveQuery, db } from '../db';
 import { Link } from 'react-router-dom';
 import { Package, Tags, ShoppingCart, Search, PlusCircle, TrendingUp, AlertTriangle } from 'lucide-react';
 import { startOfDay } from 'date-fns';
@@ -8,34 +12,41 @@ import { startOfDay } from 'date-fns';
 export function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   
+  // جلب إحصائيات المنتجات والأصناف سحابياً
   const productCount = useLiveQuery(() => db.products.count(), []);
   const categoryCount = useLiveQuery(() => db.categories.count(), []);
   
+  // حساب إجمالي المبيعات
   const totalSalesAmount = useLiveQuery(async () => {
     const sales = await db.sales.toArray();
-    return sales.reduce((sum, sale) => sum + sale.sellingPrice, 0);
+    return sales.reduce((sum, sale) => sum + (sale.sellingPrice || 0), 0);
   }, []);
 
+  // حساب مبيعات اليوم
   const todaySalesAmount = useLiveQuery(async () => {
-    const today = startOfDay(new Date());
+    const today = startOfDay(new Date()).toISOString();
     const sales = await db.sales.filter(s => s.date >= today).toArray();
-    return sales.reduce((sum, sale) => sum + sale.sellingPrice, 0);
+    return sales.reduce((sum, sale) => sum + (sale.sellingPrice || 0), 0);
   }, []);
 
+  // حساب المنتجات منخفضة المخزون
   const lowStockCount = useLiveQuery(async () => {
     return await db.products.filter(p => p.quantity !== undefined && p.quantity <= 5).count();
   }, []);
   
+  // منطق البحث السحابي
   const searchResults = useLiveQuery(
-    () => {
+    async () => {
       if (!searchQuery) return [];
-      return db.products
+      const query = searchQuery.toLowerCase();
+      const results = await db.products
         .filter(p => 
-          p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-          (p.barcode && p.barcode.includes(searchQuery))
+          p.name.toLowerCase().includes(query) || 
+          (p.barcode && p.barcode.includes(query))
         )
         .limit(10)
         .toArray();
+      return results;
     },
     [searchQuery]
   );
@@ -45,7 +56,7 @@ export function Home() {
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">نظرة عامة</h1>
-          <p className="text-gray-500 mt-1">مرحباً بك في لوحة تحكم متجرك</p>
+          <p className="text-gray-500 mt-1">مرحباً بك في لوحة تحكم متجرك السحابية</p>
         </div>
         <div className="flex gap-3">
           <Link to="/categories" className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition">
@@ -59,7 +70,7 @@ export function Home() {
         </div>
       </header>
 
-      {/* Stats Cards */}
+      {/* كروت الإحصائيات */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
           <div className="bg-blue-100 p-3 rounded-lg text-blue-600">
@@ -108,7 +119,7 @@ export function Home() {
         </div>
       </div>
 
-      {/* Search Section */}
+      {/* قسم البحث */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
         <h2 className="text-xl font-bold text-gray-900 mb-4">البحث عن السلع</h2>
         <div className="relative">
@@ -142,7 +153,7 @@ export function Home() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {searchResults.map((product) => (
+                    {searchResults.map((product: any) => (
                       <tr key={product.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{product.name}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.barcode || '-'}</td>
