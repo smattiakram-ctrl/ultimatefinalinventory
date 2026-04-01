@@ -1,5 +1,8 @@
+import { useState, useEffect } from 'react';
+
 /**
  * ── Types ──
+ * تعريف أنواع البيانات المستخدمة في التطبيق
  */
 export interface Category {
   id?: string;
@@ -30,6 +33,7 @@ const API = '/api';
 
 /**
  * ── Categories ──
+ * وظائف التعامل مع التصنيفات عبر السحاب
  */
 export const getCategories = async (): Promise<Category[]> => {
   const res = await fetch(`${API}/categories`);
@@ -58,6 +62,7 @@ export const deleteCategory = async (id: string): Promise<void> => {
 
 /**
  * ── Products ──
+ * وظائف التعامل مع المنتجات عبر السحاب
  */
 export const getProducts = async (categoryId?: string): Promise<Product[]> => {
   const url = categoryId ? `${API}/products?categoryId=${categoryId}` : `${API}/products`;
@@ -92,6 +97,7 @@ export const searchProducts = async (query: string): Promise<Product[]> => {
 
 /**
  * ── Sales ──
+ * وظائف التعامل مع المبيعات عبر السحاب
  */
 export const getSales = async (query?: string): Promise<Sale[]> => {
   const url = query ? `${API}/sales?q=${encodeURIComponent(query)}` : `${API}/sales`;
@@ -127,14 +133,43 @@ export const getTotalSales = async (): Promise<number> => {
 export const uploadImage = async (file: File): Promise<string | null> => {
   const formData = new FormData();
   formData.append('file', file);
-  const res = await fetch(`${API}/upload`, { method: 'POST', body: formData });
-  const data = await res.json();
-  return data.url || null;
+  try {
+    const res = await fetch(`${API}/upload`, { method: 'POST', body: formData });
+    const data = await res.json();
+    return data.url || null;
+  } catch (e) {
+    console.error("Upload error:", e);
+    return null;
+  }
 };
 
 /**
- * ── Compatibility Bridge (Dexie/Legacy Support) ──
- * هذا الجزء يضمن عمل الصفحات التي تستورد { db } دون الحاجة لتغيير كودها
+ * ── Build Fix: useLiveQuery Mock ──
+ * هذا الجزء يحل مشكلة الخطأ في الـ Build لغياب مكتبة dexie-react-hooks
+ */
+export function useLiveQuery<T>(querier: () => Promise<T> | T, deps: any[] = []): T | undefined {
+  const [result, setResult] = useState<T>();
+
+  useEffect(() => {
+    let isMounted = true;
+    const runQuery = async () => {
+      try {
+        const data = await querier();
+        if (isMounted) setResult(data);
+      } catch (e) {
+        console.error("Cloud Data Error:", e);
+      }
+    };
+    runQuery();
+    return () => { isMounted = false; };
+  }, deps);
+
+  return result;
+}
+
+/**
+ * ── Compatibility Bridge (Dexie Legacy Support) ──
+ * هذا الجزء يضمن عمل الصفحات التي تستخدم كائن db القديم دون تعديلها
  */
 export const db = {
   items: {
@@ -148,6 +183,10 @@ export const db = {
         }
       })
     })
+  },
+  products: {
+    toArray: getProducts,
+    add: addProduct
   },
   sales: {
     toArray: getSales,
