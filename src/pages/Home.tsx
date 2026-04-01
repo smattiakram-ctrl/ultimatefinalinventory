@@ -1,18 +1,8 @@
 import { useState, useEffect } from 'react';
-/**
- * ملاحظة هامة: تم تعديل المسار ليتناسب مع هيكلة مشروعك.
- * إذا كان ملف db.ts موجوداً في المجلد الأب (src)، فإن الاستيراد من '../db' صحيح.
- * تم التأكد من أن جميع الوظائف السحابية تعمل من خلال هذا الاستدعاء.
- */
-import { useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { getCategories, getProducts, getSales, searchProducts } from '../db';
-import { Link } from 'react-router-dom';
 import { Package, Tags, ShoppingCart, Search, PlusCircle, TrendingUp, AlertTriangle } from 'lucide-react';
 import { startOfDay } from 'date-fns';
-export function Home() {
-  const [searchQuery, setSearchQuery] = useState('');
-  
   // جلب إحصائيات المنتجات والأصناف سحابياً
   const [productCount, setProductCount] = useState(0);
 const [categoryCount, setCategoryCount] = useState(0);
@@ -34,6 +24,9 @@ useEffect(() => {
   getSales().then(sales => {
     const total = sales.reduce((sum, sale) => sum + (sale.sellingPrice || 0), 0);
     setTotalSalesAmount(total);
+    });
+  }, []); 
+}
 
     // مبيعات اليوم
     const today = new Date();
