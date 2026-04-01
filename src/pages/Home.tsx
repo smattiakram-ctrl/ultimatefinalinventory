@@ -13,9 +13,16 @@ export function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   
   // جلب إحصائيات المنتجات والأصناف سحابياً
-  const productCount = useLiveQuery(() => db.products.count(), []);
-  const categoryCount = useLiveQuery(() => db.categories.count(), []);
-  
+  const [productCount, setProductCount] = useState(0);
+const [categoryCount, setCategoryCount] = useState(0);
+
+useEffect(() => {
+  // جلب المنتجات
+  getProducts().then(products => setProductCount(products.length));
+
+  // جلب الأصناف
+  getCategories().then(categories => setCategoryCount(categories.length));
+}, []);
   // حساب إجمالي المبيعات
   const totalSalesAmount = useLiveQuery(async () => {
     const sales = await db.sales.toArray();
