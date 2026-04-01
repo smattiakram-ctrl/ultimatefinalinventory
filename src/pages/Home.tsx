@@ -35,7 +35,7 @@ useEffect(() => {
       .reduce((sum, sale) => sum + (sale.sellingPrice || 0), 0);
     setTodaySalesAmount(todayTotal);
   });
-
+}, []);
   // المنتجات منخفضة المخزون
   getProducts().then(products => {
     const lowStock = products.filter(p => p.quantity !== undefined && p.quantity <= 5).length;
