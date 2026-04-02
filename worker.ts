@@ -121,12 +121,7 @@ export default {
           const r = await env.DB.prepare(`SELECT * FROM products ORDER BY created_at DESC`).all();
           results = r.results;
         }
-        return json(results.map((p: any) => ({
-          ...p,
-          categoryId: p.category_id,
-          wholesalePrice: p.wholesale_price,
-          retailPrice: p.retail_price,
-        })));
+        return json(results.map((p: any) => ({ ...p, categoryId: p.category_id, wholesalePrice: p.wholesale_price, retailPrice: p.retail_price })));
       }
       if (request.method === 'POST') {
         const b = await request.json() as any;
@@ -142,12 +137,7 @@ export default {
       const { results } = await env.DB.prepare(
         `SELECT * FROM products WHERE name LIKE ? OR barcode LIKE ? LIMIT 10`
       ).bind(`%${q}%`, `%${q}%`).all();
-      return json(results.map((p: any) => ({
-        ...p,
-        categoryId: p.category_id,
-        wholesalePrice: p.wholesale_price,
-        retailPrice: p.retail_price,
-      })));
+      return json(results.map((p: any) => ({ ...p, categoryId: p.category_id, wholesalePrice: p.wholesale_price, retailPrice: p.retail_price })));
     }
 
     if (path.match(/^\/api\/products\/[^/]+$/)) {
@@ -165,13 +155,13 @@ export default {
       }
     }
 
-    // ── Loyal Customers ──
+    // ── Loyal Customers ── (جديد)
     if (path === '/api/loyal-customers') {
       if (request.method === 'GET') {
         const { results } = await env.DB.prepare(`SELECT * FROM loyal_customers ORDER BY created_at DESC`).all();
-        return json(results.map((c: any) => ({
-          ...c,
-          createdAt: c.created_at,
+        return json(results.map((c: any) => ({ 
+          ...c, 
+          createdAt: c.created_at 
         })));
       }
       if (request.method === 'POST') {
@@ -185,15 +175,7 @@ export default {
 
     if (path.match(/^\/api\/loyal-customers\/[^/]+$/)) {
       const id = path.split('/')[3];
-
-      if (request.method === 'GET') {
-        const { results } = await env.DB.prepare(
-          `SELECT * FROM loyal_customers WHERE id=? LIMIT 1`
-        ).bind(id).all();
-        if (!results.length) return json(null, 404);
-        const c = results[0] as any;
-        return json({ ...c, createdAt: c.created_at });
-      }
+      if (request.method === 'PUT') {
         const b = await request.json() as any;
         await env.DB.prepare(
           `UPDATE loyal_customers SET name=?, phone=?, address=? WHERE id=?`
@@ -206,13 +188,7 @@ export default {
       }
     }
 
-    // ── Sales ──
-    // ملاحظة: /api/sales/total يجب أن يأتي قبل /api/sales/:id
-    if (path === '/api/sales/total') {
-      const { results } = await env.DB.prepare(`SELECT SUM(selling_price) as total FROM sales`).all();
-      return json({ total: (results[0] as any)?.total || 0 });
-    }
-
+    // ── Sales ── (محدث)
     if (path === '/api/sales') {
       if (request.method === 'GET') {
         const q = url.searchParams.get('q');
@@ -220,76 +196,75 @@ export default {
         let results;
 
         if (customerId) {
+          // جلب مبيعات زبون محدد
           const r = await env.DB.prepare(
             `SELECT * FROM sales WHERE customer_id=? ORDER BY date DESC`
           ).bind(customerId).all();
           results = r.results;
         } else if (q) {
-          const r = await env.DB.prepare(
-            `SELECT * FROM sales WHERE product_name LIKE ? ORDER BY date DESC`
-          ).bind(`%${q}%`).all();
+          const r = await env.DB.prepare(`SELECT * FROM sales WHERE product_name LIKE ? ORDER BY date DESC`).bind(`%${q}%`).all();
           results = r.results;
         } else {
           const r = await env.DB.prepare(`SELECT * FROM sales ORDER BY date DESC`).all();
           results = r.results;
         }
-
-        return json(results.map((s: any) => ({
-          ...s,
-          productId: s.product_id,
-          productName: s.product_name,
+        return json(results.map((s: any) => ({ 
+          ...s, 
+          productId: s.product_id, 
+          productName: s.product_name, 
           sellingPrice: s.selling_price,
           customerId: s.customer_id,
-          paymentStatus: s.payment_status,
-          quantity: s.quantity ?? 1,
+          paymentStatus: s.payment_status
         })));
       }
-
       if (request.method === 'POST') {
         const b = await request.json() as any;
         await env.DB.prepare(
-          `INSERT INTO sales (id, product_id, product_name, selling_price, quantity, date, customer_id, payment_status, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO sales (id, product_id, product_name, selling_price, date, customer_id, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
         ).bind(
-          b.id,
-          b.productId || null,
-          b.productName,
-          b.sellingPrice,
-          b.quantity || 1,
-          b.date,
+          b.id, 
+          b.productId || null, 
+          b.productName, 
+          b.sellingPrice, 
+          b.date, 
           b.customerId || null,
           b.paymentStatus || 'unpaid',
           Date.now()
         ).run();
         return json({ success: true });
       }
-
       if (request.method === 'DELETE') {
         await env.DB.prepare(`DELETE FROM sales`).run();
         return json({ success: true });
       }
     }
 
-    // تحديث أو حذف مبيعة محددة
-    if (path.match(/^\/api\/sales\/[^/]+$/)) {
+    if (path === '/api/sales/total') {
+      const { results } = await env.DB.prepare(`SELECT SUM(selling_price) as total FROM sales`).all();
+      return json({ total: (results[0] as any)?.total || 0 });
+    }
+
+    // تحديث حالة الدفع (جديد)
+    if (path.match(/^\/api\/sales\/[^/]+$/) && request.method === 'PUT') {
       const id = path.split('/')[3];
+      const b = await request.json() as any;
 
-      if (request.method === 'PUT') {
-        const b = await request.json() as any;
-        if (b.paymentStatus) {
-          await env.DB.prepare(
-            `UPDATE sales SET payment_status=? WHERE id=?`
-          ).bind(b.paymentStatus, id).run();
-        } else {
-          await env.DB.prepare(`DELETE FROM sales WHERE id=?`).bind(id).run();
-        }
+      if (b.paymentStatus) {
+        await env.DB.prepare(
+          `UPDATE sales SET payment_status=? WHERE id=?`
+        ).bind(b.paymentStatus, id).run();
         return json({ success: true });
       }
 
-      if (request.method === 'DELETE') {
-        await env.DB.prepare(`DELETE FROM sales WHERE id=?`).bind(id).run();
-        return json({ success: true });
-      }
+      // PUT عادي للمبيعات
+      await env.DB.prepare(`DELETE FROM sales WHERE id=?`).bind(id).run();
+      return json({ success: true });
+    }
+
+    if (path.match(/^\/api\/sales\/[^/]+$/) && request.method === 'DELETE') {
+      const id = path.split('/')[3];
+      await env.DB.prepare(`DELETE FROM sales WHERE id=?`).bind(id).run();
+      return json({ success: true });
     }
 
     // ── Frontend ──
