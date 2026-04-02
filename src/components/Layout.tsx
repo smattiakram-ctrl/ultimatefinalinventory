@@ -15,7 +15,7 @@ export function Layout() {
   const navItems = [
     { path: '/', label: 'الصفحة الرئيسية', icon: Home },
     { path: '/sell', label: 'خانة البيع', icon: ShoppingCart },
-    { path: '/categories', label: 'إضافة صنف', icon: Tags },
+    { path: '/categories', label: 'المخزن', icon: Tags },
     { path: '/add-product', label: 'إضافة سلعة', icon: PackagePlus },
     { path: '/sales', label: 'سجل المبيعات', icon: History },
   ];
