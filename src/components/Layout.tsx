@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { Home, ShoppingCart, PackagePlus, Tags, History, RefreshCcw, Menu, X } from 'lucide-react';
+import { Home, ShoppingCart, PackagePlus, Tags, History, RefreshCcw, Menu, X, Users } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -18,12 +18,13 @@ export function Layout() {
     { path: '/categories', label: 'المخزن', icon: Tags },
     { path: '/add-product', label: 'إضافة سلعة', icon: PackagePlus },
     { path: '/sales', label: 'سجل المبيعات', icon: History },
+    { path: '/loyal-customers', label: 'الزبائن الدائمين', icon: Users },
   ];
 
   const handleResetProfits = async () => {
     if (window.confirm('هل أنت متأكد من تصفير الأرباح؟ سيتم حذف جميع سجلات المبيعات نهائياً!')) {
-      const { db } = await import('../db');
-      await db.sales.clear();
+      const { clearSales } = await import('../db');
+      await clearSales();
       alert('تم تصفير الأرباح بنجاح');
     }
   };
@@ -85,7 +86,7 @@ export function Layout() {
                 </Link>
               );
             })}
-            
+
             <button
               onClick={() => {
                 if (window.innerWidth < 768) {
