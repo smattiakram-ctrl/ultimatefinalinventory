@@ -226,12 +226,13 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
 
 interface InvoiceFormProps {
   customerId: string;
-  existingInvoice?: Invoice; // إذا كانت موجودة → وضع التعديل
+  allProducts: Product[];
+  existingInvoice?: Invoice;
   onSaved: () => void;
   onCancel: () => void;
 }
 
-function InvoiceForm({ customerId, existingInvoice, onSaved, onCancel }: InvoiceFormProps) {
+function InvoiceForm({ customerId, allProducts, existingInvoice, onSaved, onCancel }: InvoiceFormProps) {
   const [date, setDate] = useState(
     existingInvoice ? existingInvoice.dateKey : todayISO()
   );
@@ -241,13 +242,7 @@ function InvoiceForm({ customerId, existingInvoice, onSaved, onCancel }: Invoice
       : [{ tempId: uid(), productName: '', quantity: 1, wholesalePrice: 0, total: 0 }]
   );
   const [isPaid, setIsPaid] = useState<boolean>(existingInvoice?.isPaid ?? false);
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-
-  // جلب كل المنتجات مرة واحدة عند فتح النموذج
-  useEffect(() => {
-    getProducts().then(setAllProducts).catch(() => setAllProducts([]));
-  }, []);
 
   const grandTotal = items.reduce((s, i) => s + (i.total || 0), 0);
 
@@ -423,6 +418,7 @@ export function CustomerDetail() {
   const { id } = useParams<{ id: string }>();
   const [customer, setCustomer] = useState<LoyalCustomer | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
@@ -432,15 +428,14 @@ export function CustomerDetail() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      // جلب الزبون
-      const customers = await getLoyalCustomers();
-      const found = customers.find(c => c.id === id) || null;
-      setCustomer(found);
-
-      if (id) {
-        const sales = await getSalesByCustomer(id);
-        setInvoices(buildInvoices(sales));
-      }
+      const [customers, sales, products] = await Promise.all([
+        getLoyalCustomers(),
+        id ? getSalesByCustomer(id) : Promise.resolve([]),
+        getProducts(),
+      ]);
+      setCustomer(customers.find(c => c.id === id) || null);
+      setInvoices(buildInvoices(sales));
+      setAllProducts(products);
     } catch (err) {
       console.error('خطأ في التحميل:', err);
     }
@@ -578,6 +573,7 @@ export function CustomerDetail() {
       {showAddForm && (
         <InvoiceForm
           customerId={id!}
+          allProducts={allProducts}
           onSaved={async () => { setShowAddForm(false); await loadData(); }}
           onCancel={() => setShowAddForm(false)}
         />
@@ -587,6 +583,7 @@ export function CustomerDetail() {
       {editingInvoice && (
         <InvoiceForm
           customerId={id!}
+          allProducts={allProducts}
           existingInvoice={editingInvoice}
           onSaved={async () => { setEditingInvoice(null); await loadData(); }}
           onCancel={() => setEditingInvoice(null)}
