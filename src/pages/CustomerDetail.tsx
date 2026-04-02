@@ -6,7 +6,6 @@ import {
   addSale,
   deleteSale,
   updateSalePaymentStatus,
-  searchProducts,
   updateProduct,
   getProducts,
   Sale,
@@ -72,11 +71,12 @@ const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
 interface ItemRowProps {
   item: InvoiceItem;
+  allProducts: Product[];   // قائمة كاملة محملة مسبقاً
   onChange: (updated: InvoiceItem) => void;
   onRemove: () => void;
 }
 
-function ItemRow({ item, onChange, onRemove }: ItemRowProps) {
+function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
   const [query, setQuery] = useState(item.productName);
   const [suggestions, setSuggestions] = useState<Product[]>([]);
   const [showSug, setShowSug] = useState(false);
@@ -92,12 +92,15 @@ function ItemRow({ item, onChange, onRemove }: ItemRowProps) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const handleNameChange = async (val: string) => {
+  const handleNameChange = (val: string) => {
     setQuery(val);
     onChange({ ...item, productName: val, productId: undefined });
-    if (val.length >= 1) {
-      const res = await searchProducts(val);
-      setSuggestions(res.slice(0, 6));
+    if (val.trim().length >= 1) {
+      const lower = val.toLowerCase();
+      const filtered = allProducts
+        .filter(p => p.name.toLowerCase().includes(lower))
+        .slice(0, 6);
+      setSuggestions(filtered);
       setShowSug(true);
     } else {
       setSuggestions([]);
@@ -144,7 +147,14 @@ function ItemRow({ item, onChange, onRemove }: ItemRowProps) {
               placeholder="اسم السلعة..."
               value={query}
               onChange={e => handleNameChange(e.target.value)}
-              onFocus={() => query.length >= 1 && setShowSug(true)}
+              onFocus={() => {
+                const lower = query.toLowerCase();
+                const pool = query.trim().length >= 1
+                  ? allProducts.filter(p => p.name.toLowerCase().includes(lower))
+                  : allProducts;
+                setSuggestions(pool.slice(0, 6));
+                setShowSug(true);
+              }}
             />
           </div>
           {showSug && suggestions.length > 0 && (
@@ -230,7 +240,14 @@ function InvoiceForm({ customerId, existingInvoice, onSaved, onCancel }: Invoice
       ? existingInvoice.items.map(i => ({ ...i, tempId: uid() }))
       : [{ tempId: uid(), productName: '', quantity: 1, wholesalePrice: 0, total: 0 }]
   );
+  const [isPaid, setIsPaid] = useState<boolean>(existingInvoice?.isPaid ?? false);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+
+  // جلب كل المنتجات مرة واحدة عند فتح النموذج
+  useEffect(() => {
+    getProducts().then(setAllProducts).catch(() => setAllProducts([]));
+  }, []);
 
   const grandTotal = items.reduce((s, i) => s + (i.total || 0), 0);
 
@@ -267,13 +284,12 @@ function InvoiceForm({ customerId, existingInvoice, onSaved, onCancel }: Invoice
         sellingPrice: item.total,
         date: new Date(date).toISOString(),
         customerId,
-        paymentStatus: existingInvoice?.isPaid ? 'paid' : 'unpaid',
+        paymentStatus: isPaid ? 'paid' : 'unpaid',
       });
 
       // إنقاص الكمية من المخزون إذا كان المنتج موجوداً
       if (item.productId) {
         try {
-          const allProducts = await getProducts();
           const product = allProducts.find(p => p.id === item.productId);
           if (product && product.quantity !== undefined) {
             const newQty = Math.max(0, (product.quantity || 0) - item.quantity);
@@ -300,15 +316,42 @@ function InvoiceForm({ customerId, existingInvoice, onSaved, onCancel }: Invoice
       </div>
 
       <div className="p-6 space-y-4">
-        {/* التاريخ */}
-        <div className="flex items-center gap-3">
-          <label className="text-sm font-medium text-gray-700 shrink-0">تاريخ الفاتورة:</label>
-          <input
-            type="date"
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-blue-500"
-            value={date}
-            onChange={e => setDate(e.target.value)}
-          />
+        {/* التاريخ + حالة الدفع */}
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-3">
+            <label className="text-sm font-medium text-gray-700 shrink-0">تاريخ الفاتورة:</label>
+            <input
+              type="date"
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-blue-500"
+              value={date}
+              onChange={e => setDate(e.target.value)}
+            />
+          </div>
+
+          {/* حالة الدفع */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-gray-700 shrink-0">حالة الدفع:</label>
+            <div className="flex rounded-lg overflow-hidden border border-gray-300">
+              <button
+                type="button"
+                onClick={() => setIsPaid(false)}
+                className={`flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium transition ${
+                  !isPaid ? 'bg-orange-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <XCircle size={15} /> غير مدفوعة
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsPaid(true)}
+                className={`flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium transition ${
+                  isPaid ? 'bg-green-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <CheckCircle size={15} /> مدفوعة
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* جدول السلع */}
@@ -328,6 +371,7 @@ function InvoiceForm({ customerId, existingInvoice, onSaved, onCancel }: Invoice
                 <ItemRow
                   key={item.tempId}
                   item={item}
+                  allProducts={allProducts}
                   onChange={updated => updateRow(item.tempId, updated)}
                   onRemove={() => removeRow(item.tempId)}
                 />
