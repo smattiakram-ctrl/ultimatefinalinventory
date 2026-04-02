@@ -16,7 +16,7 @@ export function Home() {
   useEffect(() => {
     getProducts().then(products => {
       setProductCount(products.length);
-      const lowStock = products.filter(p => p.quantity !== undefined && p.quantity <= 2).length;
+      const lowStock = products.filter(p => p.quantity !== undefined && p.quantity <= 1).length;
       setLowStockCount(lowStock);
     });
     getCategories().then(categories => setCategoryCount(categories.length));
