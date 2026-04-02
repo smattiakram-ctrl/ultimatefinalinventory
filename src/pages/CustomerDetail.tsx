@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
-  getLoyalCustomers,
   getSalesByCustomer,
   addSale,
   deleteSale,
@@ -95,16 +94,18 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
   const handleNameChange = (val: string) => {
     setQuery(val);
     onChange({ ...item, productName: val, productId: undefined });
-    if (val.trim().length >= 1) {
-      const lower = val.toLowerCase();
-      const filtered = allProducts
-        .filter(p => p.name.toLowerCase().includes(lower))
-        .slice(0, 6);
+    const trimmed = val.trim();
+    if (trimmed.length >= 1) {
+      const lower = trimmed.toLowerCase();
+      const filtered = allProducts.filter(p =>
+        p.name.toLowerCase().includes(lower)
+      ).slice(0, 8);
       setSuggestions(filtered);
-      setShowSug(true);
+      setShowSug(filtered.length > 0);
     } else {
-      setSuggestions([]);
-      setShowSug(false);
+      // بدون نص: اعرض كل السلع
+      setSuggestions(allProducts.slice(0, 8));
+      setShowSug(allProducts.length > 0);
     }
   };
 
@@ -148,12 +149,18 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
               value={query}
               onChange={e => handleNameChange(e.target.value)}
               onFocus={() => {
-                const lower = query.toLowerCase();
-                const pool = query.trim().length >= 1
-                  ? allProducts.filter(p => p.name.toLowerCase().includes(lower))
-                  : allProducts;
-                setSuggestions(pool.slice(0, 6));
-                setShowSug(true);
+                const trimmed = query.trim();
+                if (trimmed.length >= 1) {
+                  const lower = trimmed.toLowerCase();
+                  const filtered = allProducts.filter(p =>
+                    p.name.toLowerCase().includes(lower)
+                  ).slice(0, 8);
+                  setSuggestions(filtered);
+                  setShowSug(filtered.length > 0);
+                } else {
+                  setSuggestions(allProducts.slice(0, 8));
+                  setShowSug(allProducts.length > 0);
+                }
               }}
             />
           </div>
@@ -428,16 +435,26 @@ export function CustomerDetail() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [customers, sales, products] = await Promise.all([
-        getLoyalCustomers(),
-        id ? getSalesByCustomer(id) : Promise.resolve([]),
-        getProducts(),
-      ]);
-      setCustomer(customers.find(c => c.id === id) || null);
+      let customer: LoyalCustomer | null = null;
+      let sales: Sale[] = [];
+      let products: Product[] = [];
+
+      // جلب الزبون مباشرة بالـ id بدل جلب الكل
+      try {
+        const res = await fetch(`/api/loyal-customers/${id}`);
+        if (res.ok) {
+          customer = await res.json();
+        }
+      } catch (_) {}
+
+      try { if (id) sales = await getSalesByCustomer(id); } catch (_) {}
+      try { products = await getProducts(); } catch (_) {}
+
+      setCustomer(customer);
       setInvoices(buildInvoices(sales));
       setAllProducts(products);
     } catch (err) {
-      console.error('خطأ في التحميل:', err);
+      console.error('خطأ عام:', err);
     }
     setIsLoading(false);
   };
