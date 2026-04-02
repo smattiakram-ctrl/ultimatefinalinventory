@@ -185,7 +185,15 @@ export default {
 
     if (path.match(/^\/api\/loyal-customers\/[^/]+$/)) {
       const id = path.split('/')[3];
-      if (request.method === 'PUT') {
+
+      if (request.method === 'GET') {
+        const { results } = await env.DB.prepare(
+          `SELECT * FROM loyal_customers WHERE id=? LIMIT 1`
+        ).bind(id).all();
+        if (!results.length) return json(null, 404);
+        const c = results[0] as any;
+        return json({ ...c, createdAt: c.created_at });
+      }
         const b = await request.json() as any;
         await env.DB.prepare(
           `UPDATE loyal_customers SET name=?, phone=?, address=? WHERE id=?`
