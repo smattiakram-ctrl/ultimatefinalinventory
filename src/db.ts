@@ -22,6 +22,17 @@ export interface Sale {
   productName: string;
   sellingPrice: number;
   date: string; // ISO string
+  customerId?: string; // ← جديد: ربط بالزبون الدائم
+  paymentStatus?: 'paid' | 'unpaid'; // ← جديد: حالة الدفع
+}
+
+// ← جديد: نوع الزبون الدائم
+export interface LoyalCustomer {
+  id?: string;
+  name: string;
+  phone?: string;
+  address?: string;
+  createdAt?: string;
 }
 
 const API = '/api';
@@ -91,6 +102,12 @@ export const getSales = async (query?: string): Promise<Sale[]> => {
   return res.json();
 };
 
+// ← جديد: جلب مبيعات زبون محدد
+export const getSalesByCustomer = async (customerId: string): Promise<Sale[]> => {
+  const res = await fetch(`${API}/sales?customerId=${customerId}`);
+  return res.json();
+};
+
 export const addSale = async (sale: Omit<Sale, 'id'>): Promise<void> => {
   await fetch(`${API}/sales`, {
     method: 'POST',
@@ -111,6 +128,45 @@ export const getTotalSales = async (): Promise<number> => {
   const res = await fetch(`${API}/sales/total`);
   const data = await res.json();
   return data.total || 0;
+};
+
+// ← جديد: تحديث حالة الدفع
+export const updateSalePaymentStatus = async (id: string, status: 'paid' | 'unpaid'): Promise<void> => {
+  await fetch(`${API}/sales/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ paymentStatus: status }),
+  });
+};
+
+// ── Loyal Customers ──
+export const getLoyalCustomers = async (): Promise<LoyalCustomer[]> => {
+  const res = await fetch(`${API}/loyal-customers`);
+  return res.json();
+};
+
+export const addLoyalCustomer = async (customer: Omit<LoyalCustomer, 'id'>): Promise<void> => {
+  await fetch(`${API}/loyal-customers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      ...customer, 
+      id: Date.now().toString(),
+      createdAt: new Date().toISOString()
+    }),
+  });
+};
+
+export const updateLoyalCustomer = async (id: string, data: Partial<LoyalCustomer>): Promise<void> => {
+  await fetch(`${API}/loyal-customers/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+};
+
+export const deleteLoyalCustomer = async (id: string): Promise<void> => {
+  await fetch(`${API}/loyal-customers/${id}`, { method: 'DELETE' });
 };
 
 // ── Image Upload ──
