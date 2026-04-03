@@ -13,12 +13,28 @@ export function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Product[]>([]);
 
-  useEffect(() => {
-    getProducts().then(products => {
-      setProductCount(products.length);
-      const lowStock = products.filter(p => p.quantity !== undefined && p.quantity <= 1).length;
-      setLowStockCount(lowStock);
-    });
+useEffect(() => {
+  Promise.all([getProducts(), getCategories()]).then(([products, categories]) => {
+    setProductCount(products.length);
+    
+    // ✅ استثناء البطاريات من التنبيهات
+    const batteryCategories = categories
+      .filter(c => c.name.includes('بطارية') || c.name.toLowerCase().includes('battery'))
+      .map(c => c.id);
+    
+    const lowStock = products.filter(p => 
+      p.quantity !== undefined && 
+      p.quantity <= 1 &&
+      !batteryCategories.includes(p.categoryId) &&
+      !p.name?.includes('بطارية') &&
+      !p.name?.toLowerCase().includes('battery')
+    ).length;
+    
+    setLowStockCount(lowStock);
+  });
+  
+  getCategories().then(categories => setCategoryCount(categories.length));
+}, []);
     getCategories().then(categories => setCategoryCount(categories.length));
     getSales().then(sales => {
       const total = sales.reduce((sum, sale) => sum + (sale.sellingPrice || 0), 0);
