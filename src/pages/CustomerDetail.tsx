@@ -94,7 +94,6 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // ✅ تصحيح: التحقق من وجود منتجات
   const filterProducts = (searchText: string) => {
     console.log('🔍 filterProducts called with:', searchText, 'allProducts count:', allProducts.length);
     
@@ -103,7 +102,6 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
       return [];
     }
     
-    // إظهار جميع المنتجات المتوفرة عند التركيز (حتى بدون كتابة)
     if (!searchText.trim()) {
       return allProducts
         .filter(p => (p.quantity || 0) > 0)
@@ -183,7 +181,6 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
 
   const selectedProduct = item.productId ? allProducts.find(p => p.id === item.productId) : null;
 
-  // ✅ إظهار رسالة إذا لم تكن هناك منتجات
   const noProductsMessage = allProducts.length === 0 ? (
     <div className="absolute z-50 w-full bg-red-50 border border-red-200 rounded-lg shadow-lg mt-1 p-3 text-sm text-red-600">
       ⚠️ لا توجد سلع في المخزون. أضف سلعاً أولاً من صفحة المخزن.
@@ -214,42 +211,59 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
             />
           </div>
           
-          {/* ✅ رسالة عدم وجود منتجات */}
           {showSug && noProductsMessage}
           
+          {/* ⬇️⬇️⬇️ الكود المُصلح هنا ⬇️⬇️⬇️ */}
           {showSug && suggestions.length > 0 && (
-            <ul className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto">
-              {suggestions.map((p, idx) => (
-                <li
-                  key={p.id}
-                  onClick={() => pickProduct(p)}
-                  className={`flex items-center justify-between px-3 py-2 cursor-pointer text-sm transition ${
-                    idx === highlighted ? 'bg-blue-100 text-blue-900' : 'hover:bg-blue-50'
-                  } ${(p.quantity || 0) <= 0 ? 'opacity-50 bg-red-50' : ''}`}
-                >
-                  <div className="flex flex-col">
-                    <span className="font-medium flex items-center gap-2">
-                      {p.name}
-                      {(p.quantity || 0) <= 0 && (
-                        <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
-                          نفد المخزون
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      مخزون: {p.quantity ?? 0} | بيع: {p.retailPrice ?? 0} د.ج
-                    </span>
-                  </div>
-                  <div className="text-left">
-                    <span className="block font-bold text-blue-600">
-                      {p.wholesalePrice ?? 0} د.ج
-                    </span>
-                    <span className="text-xs text-gray-400">سعر الجملة</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <>
+              {/* طبقة خلفية لإغلاق الاقتراحات عند النقر خارجها */}
+              <div 
+                className="fixed inset-0 z-[9998] bg-transparent"
+                onClick={() => setShowSug(false)}
+              />
+              <ul 
+                className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-2xl max-h-60 overflow-y-auto w-[350px]"
+                style={{
+                  top: inputRef.current?.getBoundingClientRect().bottom ?? 0,
+                  left: inputRef.current?.getBoundingClientRect().left ?? 0,
+                }}
+              >
+                {suggestions.map((p, idx) => (
+                  <li
+                    key={p.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      pickProduct(p);
+                    }}
+                    className={`flex items-center justify-between px-3 py-2 cursor-pointer text-sm transition border-b border-gray-100 last:border-0 ${
+                      idx === highlighted ? 'bg-blue-100 text-blue-900' : 'hover:bg-blue-50'
+                    } ${(p.quantity || 0) <= 0 ? 'opacity-50 bg-red-50' : ''}`}
+                  >
+                    <div className="flex flex-col">
+                      <span className="font-medium flex items-center gap-2">
+                        {p.name}
+                        {(p.quantity || 0) <= 0 && (
+                          <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
+                            نفد المخزون
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        مخزون: {p.quantity ?? 0} | بيع: {p.retailPrice ?? 0} د.ج
+                      </span>
+                    </div>
+                    <div className="text-left">
+                      <span className="block font-bold text-blue-600">
+                        {p.wholesalePrice ?? 0} د.ج
+                      </span>
+                      <span className="text-xs text-gray-400">سعر الجملة</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
+          {/* ⬆️⬆️⬆️ نهاية الكود المُصلح ⬆️⬆️⬆️ */}
           
           {showSug && query.trim() && suggestions.length === 0 && allProducts.length > 0 && (
             <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 p-3 text-sm text-gray-500">
@@ -330,7 +344,6 @@ function InvoiceForm({ customerId, allProducts: initialProducts, onSaved, onCanc
   const [allProducts, setAllProducts] = useState<Product[]>(initialProducts);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
 
-  // ✅ تحميل المنتجات عند فتح النموذج إذا كانت فارغة
   useEffect(() => {
     if (allProducts.length === 0) {
       console.log('🔄 Loading products...');
@@ -364,7 +377,6 @@ function InvoiceForm({ customerId, allProducts: initialProducts, onSaved, onCanc
     const validItems = items.filter(i => i.productName.trim());
     if (validItems.length === 0) return alert('أضف سلعة واحدة على الأقل');
 
-    // التحقق من توفر الكميات في المخزون
     for (const item of validItems) {
       if (item.productId) {
         const product = allProducts.find(p => p.id === item.productId);
@@ -379,7 +391,6 @@ function InvoiceForm({ customerId, allProducts: initialProducts, onSaved, onCanc
 
     setIsSaving(true);
 
-    // إضافة المبيعات الجديدة وتحديث المخزون
     for (const item of validItems) {
       await addSale({
         productId: item.productId,
@@ -391,7 +402,6 @@ function InvoiceForm({ customerId, allProducts: initialProducts, onSaved, onCanc
         quantity: item.quantity,
       });
 
-      // إنقاص الكمية من المخزون
       if (item.productId) {
         const product = allProducts.find(p => p.id === item.productId);
         if (product && product.quantity !== undefined) {
