@@ -21,18 +21,25 @@ export interface Sale {
   productId?: string;
   productName: string;
   sellingPrice: number;
-  date: string; // ISO string
-  customerId?: string; // ← جديد: ربط بالزبون الدائم
-  paymentStatus?: 'paid' | 'unpaid'; // ← جديد: حالة الدفع
+  date: string;
+  customerId?: string;
+  paymentStatus?: 'paid' | 'unpaid';
+  quantity?: number; // ← جديد: لتتبع الكمية المباعة
 }
 
-// ← جديد: نوع الزبون الدائم
 export interface LoyalCustomer {
   id?: string;
   name: string;
   phone?: string;
   address?: string;
   createdAt?: string;
+}
+
+// ── Profits ──
+export interface Profits {
+  totalRevenue: number;
+  totalCost: number;
+  profit: number;
 }
 
 const API = '/api';
@@ -102,7 +109,6 @@ export const getSales = async (query?: string): Promise<Sale[]> => {
   return res.json();
 };
 
-// ← جديد: جلب مبيعات زبون محدد
 export const getSalesByCustomer = async (customerId: string): Promise<Sale[]> => {
   const res = await fetch(`${API}/sales?customerId=${customerId}`);
   return res.json();
@@ -130,7 +136,6 @@ export const getTotalSales = async (): Promise<number> => {
   return data.total || 0;
 };
 
-// ← جديد: تحديث حالة الدفع
 export const updateSalePaymentStatus = async (id: string, status: 'paid' | 'unpaid'): Promise<void> => {
   await fetch(`${API}/sales/${id}`, {
     method: 'PUT',
@@ -142,6 +147,12 @@ export const updateSalePaymentStatus = async (id: string, status: 'paid' | 'unpa
 // ── Loyal Customers ──
 export const getLoyalCustomers = async (): Promise<LoyalCustomer[]> => {
   const res = await fetch(`${API}/loyal-customers`);
+  return res.json();
+};
+
+export const getLoyalCustomer = async (id: string): Promise<LoyalCustomer | null> => {
+  const res = await fetch(`${API}/loyal-customers/${id}`);
+  if (!res.ok) return null;
   return res.json();
 };
 
@@ -167,6 +178,12 @@ export const updateLoyalCustomer = async (id: string, data: Partial<LoyalCustome
 
 export const deleteLoyalCustomer = async (id: string): Promise<void> => {
   await fetch(`${API}/loyal-customers/${id}`, { method: 'DELETE' });
+};
+
+// ── Profits ──
+export const getProfits = async (): Promise<Profits> => {
+  const res = await fetch(`${API}/sales/profits`);
+  return res.json();
 };
 
 // ── Image Upload ──
