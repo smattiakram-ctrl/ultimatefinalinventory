@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, FormEvent } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   getSalesByCustomer,
@@ -7,6 +7,7 @@ import {
   updateSalePaymentStatus,
   updateProduct,
   getProducts,
+  getLoyalCustomer,
   Sale,
   LoyalCustomer,
   Product,
@@ -32,25 +33,25 @@ import {
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface InvoiceItem {
-  tempId: string;       // مؤقت للواجهة فقط
-  saleId?: string;      // id في قاعدة البيانات إذا حُفظ
+  tempId: string;
+  saleId?: string;
   productId?: string;
   productName: string;
   quantity: number;
   wholesalePrice: number;
-  total: number;        // قابل للتعديل اليدوي
+  total: number;
 }
 
 interface Invoice {
-  dateKey: string;      // YYYY-MM-DD للترتيب
-  dateLabel: string;    // نص عربي للعرض
+  dateKey: string;
+  dateLabel: string;
   items: InvoiceItem[];
   grandTotal: number;
   isPaid: boolean;
   rawSales: Sale[];
 }
 
-// ─── مساعدات ─────────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -66,11 +67,11 @@ const formatDateAr = (isoDate: string) =>
 
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
-// ─── مكوّن صف سلعة في نموذج الفاتورة ─────────────────────────────────────────
+// ─── ItemRow Component ───────────────────────────────────────────────────────
 
 interface ItemRowProps {
   item: InvoiceItem;
-  allProducts: Product[];   // قائمة كاملة محملة مسبقاً
+  allProducts: Product[];
   onChange: (updated: InvoiceItem) => void;
   onRemove: () => void;
 }
@@ -79,34 +80,38 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
   const [query, setQuery] = useState(item.productName);
   const [suggestions, setSuggestions] = useState<Product[]>([]);
   const [showSug, setShowSug] = useState(false);
+  const [highlighted, setHighlighted] = useState(-1);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // إغلاق القائمة عند النقر خارجها
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node))
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
         setShowSug(false);
+      }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  const filterProducts = (searchText: string) => {
+    if (!searchText.trim()) {
+      return allProducts.slice(0, 10);
+    }
+    const lower = searchText.toLowerCase();
+    return allProducts
+      .filter(p => p.name.toLowerCase().includes(lower))
+      .slice(0, 8);
+  };
+
   const handleNameChange = (val: string) => {
     setQuery(val);
     onChange({ ...item, productName: val, productId: undefined });
-    const trimmed = val.trim();
-    if (trimmed.length >= 1) {
-      const lower = trimmed.toLowerCase();
-      const filtered = allProducts.filter(p =>
-        p.name.toLowerCase().includes(lower)
-      ).slice(0, 8);
-      setSuggestions(filtered);
-      setShowSug(filtered.length > 0);
-    } else {
-      // بدون نص: اعرض كل السلع
-      setSuggestions(allProducts.slice(0, 8));
-      setShowSug(allProducts.length > 0);
-    }
+    
+    const filtered = filterProducts(val);
+    setSuggestions(filtered);
+    setShowSug(filtered.length > 0);
+    setHighlighted(-1);
   };
 
   const pickProduct = (p: Product) => {
@@ -114,6 +119,7 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
     setShowSug(false);
     const wp = p.wholesalePrice ?? 0;
     const qty = item.quantity || 1;
+    
     onChange({
       ...item,
       productId: p.id,
@@ -121,6 +127,23 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
       wholesalePrice: wp,
       total: wp * qty,
     });
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!showSug) return;
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlighted(prev => (prev < suggestions.length - 1 ? prev + 1 : prev));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlighted(prev => (prev > 0 ? prev - 1 : -1));
+    } else if (e.key === 'Enter' && highlighted >= 0) {
+      e.preventDefault();
+      pickProduct(suggestions[highlighted]);
+    } else if (e.key === 'Escape') {
+      setShowSug(false);
+    }
   };
 
   const handleQty = (val: number) => {
@@ -136,100 +159,116 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
     onChange({ ...item, total: val });
   };
 
+  const selectedProduct = item.productId ? allProducts.find(p => p.id === item.productId) : null;
+
   return (
     <tr className="border-b border-gray-100">
-      {/* اسم السلعة */}
       <td className="p-2">
         <div ref={wrapRef} className="relative">
-          <div className="flex items-center gap-1 border border-gray-300 rounded-lg px-2 focus-within:border-blue-500">
+          <div className="flex items-center gap-1 border border-gray-300 rounded-lg px-2 focus-within:ring-2 focus-within:ring-blue-500 bg-white">
             <Search size={14} className="text-gray-400 shrink-0" />
             <input
-              className="w-full py-1.5 text-sm outline-none bg-transparent"
-              placeholder="اسم السلعة..."
+              ref={inputRef}
+              className="w-full py-2 text-sm outline-none bg-transparent"
+              placeholder="اكتب اسم السلعة..."
               value={query}
               onChange={e => handleNameChange(e.target.value)}
               onFocus={() => {
-                const trimmed = query.trim();
-                if (trimmed.length >= 1) {
-                  const lower = trimmed.toLowerCase();
-                  const filtered = allProducts.filter(p =>
-                    p.name.toLowerCase().includes(lower)
-                  ).slice(0, 8);
-                  setSuggestions(filtered);
-                  setShowSug(filtered.length > 0);
-                } else {
-                  setSuggestions(allProducts.slice(0, 8));
-                  setShowSug(allProducts.length > 0);
-                }
+                const filtered = filterProducts(query);
+                setSuggestions(filtered);
+                setShowSug(filtered.length > 0);
               }}
+              onKeyDown={handleKeyDown}
+              autoComplete="off"
             />
           </div>
+          
           {showSug && suggestions.length > 0 && (
-            <ul className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto">
-              {suggestions.map(p => (
+            <ul className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto">
+              {suggestions.map((p, idx) => (
                 <li
                   key={p.id}
-                  onMouseDown={() => pickProduct(p)}
-                  className="flex items-center justify-between px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm"
+                  onClick={() => pickProduct(p)}
+                  className={`flex items-center justify-between px-3 py-2 cursor-pointer text-sm transition ${
+                    idx === highlighted ? 'bg-blue-100 text-blue-900' : 'hover:bg-blue-50'
+                  }`}
                 >
-                  <span className="font-medium">{p.name}</span>
-                  <span className="text-gray-400 text-xs">
-                    {p.wholesalePrice} د.ج | مخزون: {p.quantity ?? 0}
-                  </span>
+                  <div className="flex flex-col">
+                    <span className="font-medium">{p.name}</span>
+                    <span className="text-xs text-gray-500">
+                      مخزون: {p.quantity ?? 0} | بيع: {p.retailPrice ?? 0} د.ج
+                    </span>
+                  </div>
+                  <div className="text-left">
+                    <span className="block font-bold text-blue-600">
+                      {p.wholesalePrice ?? 0} د.ج
+                    </span>
+                    <span className="text-xs text-gray-400">سعر الجملة</span>
+                  </div>
                 </li>
               ))}
             </ul>
           )}
+          
+          {showSug && query.trim() && suggestions.length === 0 && (
+            <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 p-3 text-sm text-gray-500">
+              لا توجد سلع مطابقة
+            </div>
+          )}
         </div>
       </td>
 
-      {/* الكمية */}
-      <td className="p-2 w-20">
+      <td className="p-2 w-24">
         <input
           type="number"
           min={1}
-          className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-center outline-none focus:border-blue-500"
+          max={selectedProduct?.quantity}
+          title={selectedProduct ? `المخزون المتاح: ${selectedProduct.quantity}` : ''}
+          className="w-full border border-gray-300 rounded-lg px-2 py-2 text-sm text-center outline-none focus:ring-2 focus:ring-blue-500"
           value={item.quantity}
           onChange={e => handleQty(Number(e.target.value))}
         />
       </td>
 
-      {/* سعر الجملة */}
-      <td className="p-2 w-28">
-        <input
-          type="number"
-          min={0}
-          className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-center outline-none focus:border-blue-500"
-          value={item.wholesalePrice}
-          onChange={e => handlePrice(Number(e.target.value))}
-        />
+      <td className="p-2 w-32">
+        <div className="relative">
+          <input
+            type="number"
+            min={0}
+            className="w-full border border-gray-300 rounded-lg px-2 py-2 text-sm text-center outline-none focus:ring-2 focus:ring-blue-500"
+            value={item.wholesalePrice}
+            onChange={e => handlePrice(Number(e.target.value))}
+          />
+          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">د.ج</span>
+        </div>
       </td>
 
-      {/* المجموع */}
-      <td className="p-2 w-28">
-        <input
-          type="number"
-          min={0}
-          className="w-full border border-blue-300 bg-blue-50 rounded-lg px-2 py-1.5 text-sm text-center font-bold outline-none focus:border-blue-500"
-          value={item.total}
-          onChange={e => handleTotal(Number(e.target.value))}
-        />
+      <td className="p-2 w-32">
+        <div className="relative">
+          <input
+            type="number"
+            min={0}
+            className="w-full border border-blue-300 bg-blue-50 rounded-lg px-2 py-2 text-sm text-center font-bold outline-none focus:ring-2 focus:ring-blue-500"
+            value={item.total}
+            onChange={e => handleTotal(Number(e.target.value))}
+          />
+          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-blue-400">د.ج</span>
+        </div>
       </td>
 
-      {/* حذف */}
       <td className="p-2 w-10">
         <button
           onClick={onRemove}
-          className="text-red-400 hover:text-red-600 transition"
+          className="text-red-400 hover:text-red-600 transition p-1 rounded hover:bg-red-50"
         >
-          <Trash2 size={16} />
+          <Trash2 size={18} />
         </button>
       </td>
     </tr>
   );
 }
 
-// ─── نموذج إضافة / تعديل فاتورة ──────────────────────────────────────────────
+// ─── InvoiceForm Component ───────────────────────────────────────────────────
 
 interface InvoiceFormProps {
   customerId: string;
@@ -269,16 +308,29 @@ function InvoiceForm({ customerId, allProducts, existingInvoice, onSaved, onCanc
     const validItems = items.filter(i => i.productName.trim());
     if (validItems.length === 0) return alert('أضف سلعة واحدة على الأقل');
 
+    // ✅ التحقق من توفر الكميات في المخزون
+    for (const item of validItems) {
+      if (item.productId) {
+        const product = allProducts.find(p => p.id === item.productId);
+        if (product && product.quantity !== undefined) {
+          if (item.quantity > product.quantity) {
+            alert(`الكمية المطلوبة للسلعة "${item.productName}" (${item.quantity}) أكبر من المخزون المتاح (${product.quantity})`);
+            return;
+          }
+        }
+      }
+    }
+
     setIsSaving(true);
 
-    // إذا كانت فاتورة موجودة → احذف مبيعاتها القديمة أولاً
+    // حذف المبيعات القديمة إذا كانت تعديل
     if (existingInvoice) {
       for (const s of existingInvoice.rawSales) {
         if (s.id) await deleteSale(s.id);
       }
     }
 
-    // أضف كل سلعة كـ Sale جديدة
+    // إضافة المبيعات الجديدة وتحديث المخزون
     for (const item of validItems) {
       await addSale({
         productId: item.productId,
@@ -287,17 +339,19 @@ function InvoiceForm({ customerId, allProducts, existingInvoice, onSaved, onCanc
         date: new Date(date).toISOString(),
         customerId,
         paymentStatus: isPaid ? 'paid' : 'unpaid',
+        quantity: item.quantity, // ← جديد: حفظ الكمية
       });
 
-      // إنقاص الكمية من المخزون إذا كان المنتج موجوداً
+      // ✅ إنقاص الكمية من المخزون
       if (item.productId) {
-        try {
-          const product = allProducts.find(p => p.id === item.productId);
-          if (product && product.quantity !== undefined) {
-            const newQty = Math.max(0, (product.quantity || 0) - item.quantity);
-            await updateProduct(item.productId, { ...product, quantity: newQty });
-          }
-        } catch (_) {}
+        const product = allProducts.find(p => p.id === item.productId);
+        if (product && product.quantity !== undefined) {
+          const newQty = Math.max(0, product.quantity - item.quantity);
+          await updateProduct(item.productId, { 
+            ...product, 
+            quantity: newQty 
+          });
+        }
       }
     }
 
@@ -307,7 +361,6 @@ function InvoiceForm({ customerId, allProducts, existingInvoice, onSaved, onCanc
 
   return (
     <div className="bg-white rounded-xl shadow-md border border-blue-200 overflow-hidden">
-      {/* رأس النموذج */}
       <div className="bg-blue-600 text-white px-6 py-4 flex justify-between items-center">
         <h3 className="font-bold text-lg">
           {existingInvoice ? 'تعديل الفاتورة' : 'فاتورة جديدة'}
@@ -318,7 +371,6 @@ function InvoiceForm({ customerId, allProducts, existingInvoice, onSaved, onCanc
       </div>
 
       <div className="p-6 space-y-4">
-        {/* التاريخ + حالة الدفع */}
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-3">
             <label className="text-sm font-medium text-gray-700 shrink-0">تاريخ الفاتورة:</label>
@@ -330,7 +382,6 @@ function InvoiceForm({ customerId, allProducts, existingInvoice, onSaved, onCanc
             />
           </div>
 
-          {/* حالة الدفع */}
           <div className="flex items-center gap-2">
             <label className="text-sm font-medium text-gray-700 shrink-0">حالة الدفع:</label>
             <div className="flex rounded-lg overflow-hidden border border-gray-300">
@@ -356,7 +407,6 @@ function InvoiceForm({ customerId, allProducts, existingInvoice, onSaved, onCanc
           </div>
         </div>
 
-        {/* جدول السلع */}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[500px]">
             <thead>
@@ -382,7 +432,6 @@ function InvoiceForm({ customerId, allProducts, existingInvoice, onSaved, onCanc
           </table>
         </div>
 
-        {/* زر إضافة سلعة */}
         <button
           onClick={addRow}
           className="flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm font-medium transition"
@@ -391,13 +440,11 @@ function InvoiceForm({ customerId, allProducts, existingInvoice, onSaved, onCanc
           إضافة سلعة
         </button>
 
-        {/* المجموع الكلي */}
         <div className="flex justify-between items-center bg-gray-50 rounded-xl px-6 py-4 border border-gray-200">
           <span className="font-bold text-gray-800 text-lg">إجمالي الفاتورة:</span>
           <span className="text-2xl font-bold text-blue-600">{grandTotal.toLocaleString()} د.ج</span>
         </div>
 
-        {/* أزرار الحفظ */}
         <div className="flex gap-3 justify-end">
           <button
             onClick={onCancel}
@@ -419,7 +466,7 @@ function InvoiceForm({ customerId, allProducts, existingInvoice, onSaved, onCanc
   );
 }
 
-// ─── الصفحة الرئيسية ──────────────────────────────────────────────────────────
+// ─── Main CustomerDetail Component ───────────────────────────────────────────
 
 export function CustomerDetail() {
   const { id } = useParams<{ id: string }>();
@@ -435,22 +482,14 @@ export function CustomerDetail() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      let customer: LoyalCustomer | null = null;
-      let sales: Sale[] = [];
-      let products: Product[] = [];
+      if (!id) return;
+      
+      // ✅ استخدام getLoyalCustomer الجديدة
+      const customerData = await getLoyalCustomer(id);
+      const sales = await getSalesByCustomer(id);
+      const products = await getProducts();
 
-      // جلب الزبون مباشرة بالـ id بدل جلب الكل
-      try {
-        const res = await fetch(`/api/loyal-customers/${id}`);
-        if (res.ok) {
-          customer = await res.json();
-        }
-      } catch (_) {}
-
-      try { if (id) sales = await getSalesByCustomer(id); } catch (_) {}
-      try { products = await getProducts(); } catch (_) {}
-
-      setCustomer(customer);
+      setCustomer(customerData);
       setInvoices(buildInvoices(sales));
       setAllProducts(products);
     } catch (err) {
@@ -459,7 +498,6 @@ export function CustomerDetail() {
     setIsLoading(false);
   };
 
-  // تجميع المبيعات إلى فواتير يومية
   const buildInvoices = (sales: Sale[]): Invoice[] => {
     const map: Record<string, Sale[]> = {};
     for (const s of sales) {
@@ -477,8 +515,8 @@ export function CustomerDetail() {
           saleId: s.id,
           productId: s.productId,
           productName: s.productName,
-          quantity: 1,
-          wholesalePrice: s.sellingPrice,
+          quantity: s.quantity || 1,
+          wholesalePrice: s.sellingPrice / (s.quantity || 1),
           total: s.sellingPrice,
         })),
         grandTotal: rawSales.reduce((sum, s) => sum + s.sellingPrice, 0),
@@ -497,13 +535,26 @@ export function CustomerDetail() {
 
   const deleteInvoice = async (invoice: Invoice) => {
     if (!window.confirm('هل تريد حذف هذه الفاتورة؟')) return;
+    
+    // ✅ إعادة الكميات للمخزون عند حذف الفاتورة
     for (const s of invoice.rawSales) {
-      if (s.id) await deleteSale(s.id);
+      if (s.id) {
+        // إعادة الكمية للمخزون
+        if (s.productId && s.quantity) {
+          const product = allProducts.find(p => p.id === s.productId);
+          if (product) {
+            await updateProduct(s.productId, {
+              ...product,
+              quantity: (product.quantity || 0) + s.quantity
+            });
+          }
+        }
+        await deleteSale(s.id);
+      }
     }
     await loadData();
   };
 
-  // ── حالة التحميل ──
   if (isLoading) {
     return (
       <div className="flex flex-col justify-center items-center h-64 gap-3" dir="rtl">
@@ -531,8 +582,6 @@ export function CustomerDetail() {
 
   return (
     <div className="space-y-6" dir="rtl">
-
-      {/* ── زر العودة ── */}
       <Link
         to="/loyal-customers"
         className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-800 transition text-sm"
@@ -541,7 +590,6 @@ export function CustomerDetail() {
         العودة لقائمة الزبائن
       </Link>
 
-      {/* ── بطاقة معلومات الزبون ── */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
         <div className="flex flex-wrap items-start gap-5">
           <div className="bg-blue-100 p-4 rounded-full">
@@ -561,7 +609,6 @@ export function CustomerDetail() {
             )}
           </div>
 
-          {/* إحصاءات سريعة */}
           <div className="flex gap-4 flex-wrap">
             <div className="text-center bg-gray-50 rounded-xl px-5 py-3">
               <p className="text-xs text-gray-500">عدد الفواتير</p>
@@ -575,7 +622,6 @@ export function CustomerDetail() {
         </div>
       </div>
 
-      {/* ── زر إضافة فاتورة ── */}
       {!showAddForm && !editingInvoice && (
         <button
           onClick={() => setShowAddForm(true)}
@@ -586,7 +632,6 @@ export function CustomerDetail() {
         </button>
       )}
 
-      {/* ── نموذج إضافة فاتورة ── */}
       {showAddForm && (
         <InvoiceForm
           customerId={id!}
@@ -596,7 +641,6 @@ export function CustomerDetail() {
         />
       )}
 
-      {/* ── نموذج تعديل فاتورة ── */}
       {editingInvoice && (
         <InvoiceForm
           customerId={id!}
@@ -607,7 +651,6 @@ export function CustomerDetail() {
         />
       )}
 
-      {/* ── قائمة الفواتير ── */}
       <div className="space-y-4">
         <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
           <Calendar className="text-blue-600" size={22} />
@@ -628,7 +671,6 @@ export function CustomerDetail() {
                 invoice.isPaid ? 'border-green-200' : 'border-orange-200'
               }`}
             >
-              {/* رأس الفاتورة */}
               <div
                 className={`px-5 py-4 flex flex-wrap gap-3 justify-between items-center ${
                   invoice.isPaid ? 'bg-green-50' : 'bg-orange-50'
@@ -643,7 +685,6 @@ export function CustomerDetail() {
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
-                  {/* تعديل */}
                   <button
                     onClick={() => { setEditingInvoice(invoice); setShowAddForm(false); }}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 hover:border-blue-400 hover:text-blue-600 text-sm transition"
@@ -651,7 +692,6 @@ export function CustomerDetail() {
                     <Edit2 size={14} /> تعديل
                   </button>
 
-                  {/* حذف */}
                   <button
                     onClick={() => deleteInvoice(invoice)}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 hover:border-red-400 hover:text-red-600 text-sm transition"
@@ -659,7 +699,6 @@ export function CustomerDetail() {
                     <Trash2 size={14} /> حذف
                   </button>
 
-                  {/* حالة الدفع */}
                   <button
                     onClick={() => togglePayment(invoice)}
                     className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-medium text-sm transition ${
@@ -676,32 +715,33 @@ export function CustomerDetail() {
                 </div>
               </div>
 
-              {/* محتوى الفاتورة */}
               <div className="p-5">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-gray-200 text-sm text-gray-500">
                       <th className="text-right pb-2">السلعة</th>
+                      <th className="text-center pb-2">الكمية</th>
                       <th className="text-center pb-2">المبلغ</th>
                       <th className="text-left pb-2">الحالة</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {invoice.rawSales.map(sale => (
-                      <tr key={sale.id} className="border-b border-gray-50 last:border-0">
-                        <td className="py-2.5 text-gray-800 font-medium">{sale.productName}</td>
+                    {invoice.items.map((item, i) => (
+                      <tr key={i} className="border-b border-gray-50 last:border-0">
+                        <td className="py-2.5 text-gray-800 font-medium">{item.productName}</td>
+                        <td className="py-2.5 text-center text-gray-600">{item.quantity}</td>
                         <td className="py-2.5 text-center text-gray-900 font-bold">
-                          {sale.sellingPrice.toLocaleString()} د.ج
+                          {item.total.toLocaleString()} د.ج
                         </td>
                         <td className="py-2.5 text-left">
                           <span
                             className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full ${
-                              sale.paymentStatus === 'paid'
+                              invoice.isPaid
                                 ? 'bg-green-100 text-green-700'
                                 : 'bg-orange-100 text-orange-700'
                             }`}
                           >
-                            {sale.paymentStatus === 'paid'
+                            {invoice.isPaid
                               ? <><CheckCircle size={11} /> مدفوع</>
                               : <><XCircle size={11} /> غير مدفوع</>
                             }
