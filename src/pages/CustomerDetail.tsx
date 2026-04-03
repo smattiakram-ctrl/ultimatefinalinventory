@@ -94,11 +94,22 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // ✅ إظهار فقط السلع المتوفرة (quantity > 0)
+  // ✅ تصحيح: التحقق من وجود منتجات
   const filterProducts = (searchText: string) => {
-    if (!searchText.trim()) {
-      return allProducts.filter(p => (p.quantity || 0) > 0).slice(0, 10);
+    console.log('🔍 filterProducts called with:', searchText, 'allProducts count:', allProducts.length);
+    
+    if (allProducts.length === 0) {
+      console.warn('⚠️ allProducts is empty!');
+      return [];
     }
+    
+    // إظهار جميع المنتجات المتوفرة عند التركيز (حتى بدون كتابة)
+    if (!searchText.trim()) {
+      return allProducts
+        .filter(p => (p.quantity || 0) > 0)
+        .slice(0, 10);
+    }
+    
     const lower = searchText.toLowerCase();
     return allProducts
       .filter(p => 
@@ -113,6 +124,7 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
     onChange({ ...item, productName: val, productId: undefined });
     
     const filtered = filterProducts(val);
+    console.log('✅ Filtered suggestions:', filtered.length);
     setSuggestions(filtered);
     setShowSug(filtered.length > 0);
     setHighlighted(-1);
@@ -150,7 +162,6 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
     }
   };
 
-  // ✅ تنبيه عند تجاوز المخزون
   const handleQty = (val: number) => {
     const q = Math.max(1, val);
     
@@ -172,6 +183,13 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
 
   const selectedProduct = item.productId ? allProducts.find(p => p.id === item.productId) : null;
 
+  // ✅ إظهار رسالة إذا لم تكن هناك منتجات
+  const noProductsMessage = allProducts.length === 0 ? (
+    <div className="absolute z-50 w-full bg-red-50 border border-red-200 rounded-lg shadow-lg mt-1 p-3 text-sm text-red-600">
+      ⚠️ لا توجد سلع في المخزون. أضف سلعاً أولاً من صفحة المخزن.
+    </div>
+  ) : null;
+
   return (
     <tr className="border-b border-gray-100">
       <td className="p-2">
@@ -181,18 +199,23 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
             <input
               ref={inputRef}
               className="w-full py-2 text-sm outline-none bg-transparent"
-              placeholder="اكتب اسم السلعة..."
+              placeholder={allProducts.length === 0 ? "لا توجد سلع متاحة..." : "اكتب اسم السلعة..."}
               value={query}
               onChange={e => handleNameChange(e.target.value)}
               onFocus={() => {
+                console.log('🔥 Input focused, loading suggestions...');
                 const filtered = filterProducts(query);
                 setSuggestions(filtered);
-                setShowSug(filtered.length > 0);
+                setShowSug(filtered.length > 0 || allProducts.length === 0);
               }}
               onKeyDown={handleKeyDown}
               autoComplete="off"
+              disabled={allProducts.length === 0}
             />
           </div>
+          
+          {/* ✅ رسالة عدم وجود منتجات */}
+          {showSug && noProductsMessage}
           
           {showSug && suggestions.length > 0 && (
             <ul className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto">
@@ -228,7 +251,7 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
             </ul>
           )}
           
-          {showSug && query.trim() && suggestions.length === 0 && (
+          {showSug && query.trim() && suggestions.length === 0 && allProducts.length > 0 && (
             <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 p-3 text-sm text-gray-500">
               لا توجد سلع مطابقة أو المخزون نفد
             </div>
@@ -245,6 +268,7 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
           className="w-full border border-gray-300 rounded-lg px-2 py-2 text-sm text-center outline-none focus:ring-2 focus:ring-blue-500"
           value={item.quantity}
           onChange={e => handleQty(Number(e.target.value))}
+          disabled={!selectedProduct}
         />
       </td>
 
@@ -256,6 +280,7 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
             className="w-full border border-gray-300 rounded-lg px-2 py-2 text-sm text-center outline-none focus:ring-2 focus:ring-blue-500"
             value={item.wholesalePrice}
             onChange={e => handlePrice(Number(e.target.value))}
+            disabled={!selectedProduct}
           />
           <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">د.ج</span>
         </div>
@@ -291,22 +316,35 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
 interface InvoiceFormProps {
   customerId: string;
   allProducts: Product[];
-  existingInvoice?: Invoice;
   onSaved: () => void;
   onCancel: () => void;
 }
 
-function InvoiceForm({ customerId, allProducts, existingInvoice, onSaved, onCancel }: InvoiceFormProps) {
-  const [date, setDate] = useState(
-    existingInvoice ? existingInvoice.dateKey : todayISO()
-  );
-  const [items, setItems] = useState<InvoiceItem[]>(
-    existingInvoice
-      ? existingInvoice.items.map(i => ({ ...i, tempId: uid() }))
-      : [{ tempId: uid(), productName: '', quantity: 1, wholesalePrice: 0, total: 0 }]
-  );
-  const [isPaid, setIsPaid] = useState<boolean>(existingInvoice?.isPaid ?? false);
+function InvoiceForm({ customerId, allProducts: initialProducts, onSaved, onCancel }: InvoiceFormProps) {
+  const [date, setDate] = useState(todayISO());
+  const [items, setItems] = useState<InvoiceItem[]>([
+    { tempId: uid(), productName: '', quantity: 1, wholesalePrice: 0, total: 0 }
+  ]);
+  const [isPaid, setIsPaid] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [allProducts, setAllProducts] = useState<Product[]>(initialProducts);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+
+  // ✅ تحميل المنتجات عند فتح النموذج إذا كانت فارغة
+  useEffect(() => {
+    if (allProducts.length === 0) {
+      console.log('🔄 Loading products...');
+      setIsLoadingProducts(true);
+      getProducts().then(products => {
+        console.log('✅ Loaded products:', products.length);
+        setAllProducts(products);
+        setIsLoadingProducts(false);
+      }).catch(err => {
+        console.error('❌ Failed to load products:', err);
+        setIsLoadingProducts(false);
+      });
+    }
+  }, []);
 
   const grandTotal = items.reduce((s, i) => s + (i.total || 0), 0);
 
@@ -326,7 +364,7 @@ function InvoiceForm({ customerId, allProducts, existingInvoice, onSaved, onCanc
     const validItems = items.filter(i => i.productName.trim());
     if (validItems.length === 0) return alert('أضف سلعة واحدة على الأقل');
 
-    // ✅ التحقق من توفر الكميات في المخزون
+    // التحقق من توفر الكميات في المخزون
     for (const item of validItems) {
       if (item.productId) {
         const product = allProducts.find(p => p.id === item.productId);
@@ -341,13 +379,6 @@ function InvoiceForm({ customerId, allProducts, existingInvoice, onSaved, onCanc
 
     setIsSaving(true);
 
-    // حذف المبيعات القديمة إذا كانت تعديل
-    if (existingInvoice) {
-      for (const s of existingInvoice.rawSales) {
-        if (s.id) await deleteSale(s.id);
-      }
-    }
-
     // إضافة المبيعات الجديدة وتحديث المخزون
     for (const item of validItems) {
       await addSale({
@@ -360,7 +391,7 @@ function InvoiceForm({ customerId, allProducts, existingInvoice, onSaved, onCanc
         quantity: item.quantity,
       });
 
-      // ✅ إنقاص الكمية من المخزون
+      // إنقاص الكمية من المخزون
       if (item.productId) {
         const product = allProducts.find(p => p.id === item.productId);
         if (product && product.quantity !== undefined) {
@@ -377,12 +408,19 @@ function InvoiceForm({ customerId, allProducts, existingInvoice, onSaved, onCanc
     onSaved();
   };
 
+  if (isLoadingProducts) {
+    return (
+      <div className="bg-white rounded-xl shadow-md border border-blue-200 p-8 text-center">
+        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+        <p className="text-gray-600">جاري تحميل السلع...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-xl shadow-md border border-blue-200 overflow-hidden">
       <div className="bg-blue-600 text-white px-6 py-4 flex justify-between items-center">
-        <h3 className="font-bold text-lg">
-          {existingInvoice ? 'تعديل الفاتورة' : 'فاتورة جديدة'}
-        </h3>
+        <h3 className="font-bold text-lg">فاتورة جديدة</h3>
         <button onClick={onCancel} className="hover:bg-blue-700 p-1 rounded transition">
           <X size={20} />
         </button>
@@ -453,6 +491,7 @@ function InvoiceForm({ customerId, allProducts, existingInvoice, onSaved, onCanc
         <button
           onClick={addRow}
           className="flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm font-medium transition"
+          disabled={allProducts.length === 0}
         >
           <Plus size={16} />
           إضافة سلعة
@@ -472,7 +511,7 @@ function InvoiceForm({ customerId, allProducts, existingInvoice, onSaved, onCanc
           </button>
           <button
             onClick={handleSave}
-            disabled={isSaving}
+            disabled={isSaving || allProducts.length === 0}
             className="flex items-center gap-2 px-6 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-50"
           >
             <Save size={18} />
@@ -502,15 +541,23 @@ export function CustomerDetail() {
     try {
       if (!id) return;
       
+      console.log('🔄 Loading customer data...');
       const customerData = await getLoyalCustomer(id);
+      console.log('✅ Customer:', customerData);
+      
+      console.log('🔄 Loading sales...');
       const sales = await getSalesByCustomer(id);
+      console.log('✅ Sales:', sales.length);
+      
+      console.log('🔄 Loading products...');
       const products = await getProducts();
+      console.log('✅ Products:', products.length);
 
       setCustomer(customerData);
       setInvoices(buildInvoices(sales));
       setAllProducts(products);
     } catch (err) {
-      console.error('خطأ عام:', err);
+      console.error('❌ Error loading data:', err);
     }
     setIsLoading(false);
   };
@@ -553,7 +600,6 @@ export function CustomerDetail() {
   const deleteInvoice = async (invoice: Invoice) => {
     if (!window.confirm('هل تريد حذف هذه الفاتورة؟')) return;
     
-    // ✅ إعادة الكميات للمخزون عند حذف الفاتورة
     for (const s of invoice.rawSales) {
       if (s.id) {
         if (s.productId && s.quantity) {
@@ -661,7 +707,6 @@ export function CustomerDetail() {
         <InvoiceForm
           customerId={id!}
           allProducts={allProducts}
-          existingInvoice={editingInvoice}
           onSaved={async () => { setEditingInvoice(null); await loadData(); }}
           onCancel={() => setEditingInvoice(null)}
         />
