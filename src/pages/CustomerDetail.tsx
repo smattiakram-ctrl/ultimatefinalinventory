@@ -94,13 +94,17 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  // ✅ إظهار فقط السلع المتوفرة (quantity > 0)
   const filterProducts = (searchText: string) => {
     if (!searchText.trim()) {
-      return allProducts.slice(0, 10);
+      return allProducts.filter(p => (p.quantity || 0) > 0).slice(0, 10);
     }
     const lower = searchText.toLowerCase();
     return allProducts
-      .filter(p => p.name.toLowerCase().includes(lower))
+      .filter(p => 
+        p.name.toLowerCase().includes(lower) && 
+        (p.quantity || 0) > 0
+      )
       .slice(0, 8);
   };
 
@@ -146,8 +150,15 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
     }
   };
 
+  // ✅ تنبيه عند تجاوز المخزون
   const handleQty = (val: number) => {
     const q = Math.max(1, val);
+    
+    if (selectedProduct && q > (selectedProduct.quantity || 0)) {
+      alert(`⚠️ المخزون المتاح فقط: ${selectedProduct.quantity} قطعة`);
+      return;
+    }
+    
     onChange({ ...item, quantity: q, total: item.wholesalePrice * q });
   };
 
@@ -191,10 +202,17 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
                   onClick={() => pickProduct(p)}
                   className={`flex items-center justify-between px-3 py-2 cursor-pointer text-sm transition ${
                     idx === highlighted ? 'bg-blue-100 text-blue-900' : 'hover:bg-blue-50'
-                  }`}
+                  } ${(p.quantity || 0) <= 0 ? 'opacity-50 bg-red-50' : ''}`}
                 >
                   <div className="flex flex-col">
-                    <span className="font-medium">{p.name}</span>
+                    <span className="font-medium flex items-center gap-2">
+                      {p.name}
+                      {(p.quantity || 0) <= 0 && (
+                        <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
+                          نفد المخزون
+                        </span>
+                      )}
+                    </span>
                     <span className="text-xs text-gray-500">
                       مخزون: {p.quantity ?? 0} | بيع: {p.retailPrice ?? 0} د.ج
                     </span>
@@ -212,7 +230,7 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
           
           {showSug && query.trim() && suggestions.length === 0 && (
             <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 p-3 text-sm text-gray-500">
-              لا توجد سلع مطابقة
+              لا توجد سلع مطابقة أو المخزون نفد
             </div>
           )}
         </div>
@@ -339,7 +357,7 @@ function InvoiceForm({ customerId, allProducts, existingInvoice, onSaved, onCanc
         date: new Date(date).toISOString(),
         customerId,
         paymentStatus: isPaid ? 'paid' : 'unpaid',
-        quantity: item.quantity, // ← جديد: حفظ الكمية
+        quantity: item.quantity,
       });
 
       // ✅ إنقاص الكمية من المخزون
@@ -484,7 +502,6 @@ export function CustomerDetail() {
     try {
       if (!id) return;
       
-      // ✅ استخدام getLoyalCustomer الجديدة
       const customerData = await getLoyalCustomer(id);
       const sales = await getSalesByCustomer(id);
       const products = await getProducts();
@@ -539,7 +556,6 @@ export function CustomerDetail() {
     // ✅ إعادة الكميات للمخزون عند حذف الفاتورة
     for (const s of invoice.rawSales) {
       if (s.id) {
-        // إعادة الكمية للمخزون
         if (s.productId && s.quantity) {
           const product = allProducts.find(p => p.id === s.productId);
           if (product) {
