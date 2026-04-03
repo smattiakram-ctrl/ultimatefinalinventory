@@ -14,17 +14,26 @@ export function Home() {
   const [searchResults, setSearchResults] = useState<Product[]>([]);
 
   useEffect(() => {
-    getProducts().then(products => {
+    // ✅ جلب المنتجات والأصناف معاً
+    Promise.all([getProducts(), getCategories()]).then(([products, categories]) => {
       setProductCount(products.length);
-      // ✅ استثناء "بطاريات الهاتف" من التنبيهات
+      setCategoryCount(categories.length);
+      
+      // ✅ إيجاد صنف "بطاريات الهاتف"
+      const batteryCategory = categories.find(c => 
+        c.name === 'بطاريات الهاتف'
+      );
+      
+      // ✅ استثناء منتجات هذا الصنف من التنبيهات
       const lowStock = products.filter(p => 
         p.quantity !== undefined && 
         p.quantity <= 1 &&
-        p.name !== 'بطاريات الهاتف'
+        p.categoryId !== batteryCategory?.id  // استثناء حسب categoryId
       ).length;
+      
       setLowStockCount(lowStock);
     });
-    getCategories().then(categories => setCategoryCount(categories.length));
+    
     getSales().then(sales => {
       const total = sales.reduce((sum, sale) => sum + (sale.sellingPrice || 0), 0);
       setTotalSalesAmount(total);
