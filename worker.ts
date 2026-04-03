@@ -183,7 +183,7 @@ export default {
       }
     }
 
-    // ✅ جديد: GET زبون محدد
+    // ✅ جديد: GET زبون محدد (مطلوب من CustomerDetail.tsx)
     if (path.match(/^\/api\/loyal-customers\/[^/]+$/) && request.method === 'GET') {
       const id = path.split('/')[3];
       const result = await env.DB.prepare(
@@ -215,7 +215,7 @@ export default {
       return json({ success: true });
     }
 
-    // ── Sales ──
+    // ── Sales ── (مُعدّل: إضافة quantity مع التأمين)
     if (path === '/api/sales') {
       if (request.method === 'GET') {
         const q = url.searchParams.get('q');
@@ -234,33 +234,56 @@ export default {
           const r = await env.DB.prepare(`SELECT * FROM sales ORDER BY date DESC`).all();
           results = r.results;
         }
+        
+        // ✅ تأمين: إرجاع quantity دائماً (1 كقيمة افتراضية)
         return json(results.map((s: any) => ({ 
           ...s, 
           productId: s.product_id, 
           productName: s.product_name, 
           sellingPrice: s.selling_price,
           customerId: s.customer_id,
-          paymentStatus: s.payment_status,
+          paymentStatus: s.payment_status || 'unpaid',
           quantity: s.quantity || 1
         })));
       }
+      
       if (request.method === 'POST') {
         const b = await request.json() as any;
-        await env.DB.prepare(
-          `INSERT INTO sales (id, product_id, product_name, selling_price, date, customer_id, payment_status, quantity, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).bind(
-          b.id, 
-          b.productId || null, 
-          b.productName, 
-          b.sellingPrice, 
-          b.date, 
-          b.customerId || null,
-          b.paymentStatus || 'unpaid',
-          b.quantity || 1,
-          Date.now()
-        ).run();
+        
+        // ✅ محاولة الإدراج مع quantity، وإذا فشلت نحاول بدونه
+        try {
+          await env.DB.prepare(
+            `INSERT INTO sales (id, product_id, product_name, selling_price, date, customer_id, payment_status, quantity, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          ).bind(
+            b.id, 
+            b.productId || null, 
+            b.productName, 
+            b.sellingPrice, 
+            b.date, 
+            b.customerId || null,
+            b.paymentStatus || 'unpaid',
+            b.quantity || 1,
+            Date.now()
+          ).run();
+        } catch (e) {
+          // fallback: إدراج بدون quantity (للتوافق مع الجداول القديمة)
+          await env.DB.prepare(
+            `INSERT INTO sales (id, product_id, product_name, selling_price, date, customer_id, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+          ).bind(
+            b.id, 
+            b.productId || null, 
+            b.productName, 
+            b.sellingPrice, 
+            b.date, 
+            b.customerId || null,
+            b.paymentStatus || 'unpaid',
+            Date.now()
+          ).run();
+        }
+        
         return json({ success: true });
       }
+      
       if (request.method === 'DELETE') {
         await env.DB.prepare(`DELETE FROM sales`).run();
         return json({ success: true });
@@ -272,35 +295,39 @@ export default {
       return json({ total: (results[0] as any)?.total || 0 });
     }
 
-    // ✅ جديد: Profits API
+    // ✅ جديد: Profits API (مطلوب من db.ts)
     if (path === '/api/sales/profits') {
-      const { results } = await env.DB.prepare(`
-        SELECT 
-          s.selling_price as revenue,
-          p.wholesale_price as cost,
-          s.quantity as qty
-        FROM sales s
-        LEFT JOIN products p ON s.product_id = p.id
-        WHERE s.payment_status = 'paid'
-      `).all();
-      
-      let totalRevenue = 0;
-      let totalCost = 0;
-      
-      for (const row of results) {
-        const r = row as any;
-        const qty = r.qty || 1;
-        totalRevenue += r.revenue || 0;
-        if (r.cost) {
-          totalCost += r.cost * qty;
+      try {
+        const { results } = await env.DB.prepare(`
+          SELECT 
+            s.selling_price as revenue,
+            p.wholesale_price as cost,
+            s.quantity as qty
+          FROM sales s
+          LEFT JOIN products p ON s.product_id = p.id
+          WHERE s.payment_status = 'paid'
+        `).all();
+        
+        let totalRevenue = 0;
+        let totalCost = 0;
+        
+        for (const row of results) {
+          const r = row as any;
+          const qty = r.qty || 1;
+          totalRevenue += r.revenue || 0;
+          if (r.cost) {
+            totalCost += r.cost * qty;
+          }
         }
+        
+        return json({
+          totalRevenue,
+          totalCost,
+          profit: totalRevenue - totalCost
+        });
+      } catch (error: any) {
+        return json({ error: error.message }, 500);
       }
-      
-      return json({
-        totalRevenue,
-        totalCost,
-        profit: totalRevenue - totalCost
-      });
     }
 
     // تحديث حالة الدفع
