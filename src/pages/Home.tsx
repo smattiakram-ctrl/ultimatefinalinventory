@@ -14,16 +14,16 @@ export function Home() {
   const [searchResults, setSearchResults] = useState<Product[]>([]);
 
   useEffect(() => {
-useEffect(() => {
-  getProducts().then(products => {
-    setProductCount(products.length);
-    const lowStock = products.filter(p => 
-      p.quantity !== undefined && 
-      p.quantity <= 1 &&
-      p.name !== 'بطاريات الهاتف'
-    ).length;
-    setLowStockCount(lowStock);
-  });
+    getProducts().then(products => {
+      setProductCount(products.length);
+      // ✅ استثناء "بطاريات الهاتف" من التنبيهات
+      const lowStock = products.filter(p => 
+        p.quantity !== undefined && 
+        p.quantity <= 1 &&
+        p.name !== 'بطاريات الهاتف'
+      ).length;
+      setLowStockCount(lowStock);
+    });
     getCategories().then(categories => setCategoryCount(categories.length));
     getSales().then(sales => {
       const total = sales.reduce((sum, sale) => sum + (sale.sellingPrice || 0), 0);
@@ -94,13 +94,13 @@ useEffect(() => {
             <p className="text-xl font-bold text-gray-900">{todaySalesAmount} د.ج</p>
           </div>
         </div>
-<Link to="/low-stock" className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4 hover:bg-orange-50 transition cursor-pointer">
-  <div className="bg-orange-100 p-3 rounded-lg text-orange-600"><AlertTriangle size={24} /></div>
-  <div>
-    <p className="text-xs text-gray-500 font-medium">سلع منخفضة المخزون</p>
-    <p className="text-xl font-bold text-gray-900">{lowStockCount}</p>
-  </div>
-</Link>
+        <Link to="/low-stock" className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4 hover:bg-orange-50 transition cursor-pointer">
+          <div className="bg-orange-100 p-3 rounded-lg text-orange-600"><AlertTriangle size={24} /></div>
+          <div>
+            <p className="text-xs text-gray-500 font-medium">سلع منخفضة المخزون</p>
+            <p className="text-xl font-bold text-gray-900">{lowStockCount}</p>
+          </div>
+        </Link>
       </div>
 
       {/* قسم البحث */}
