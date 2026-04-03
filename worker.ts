@@ -155,38 +155,56 @@ export default {
       }
     }
 
-    // ── Loyal Customers ── (جديد)
-    if (path === '/api/loyal-customers') {
-      if (request.method === 'GET') {
-        const { results } = await env.DB.prepare(`SELECT * FROM loyal_customers ORDER BY created_at DESC`).all();
-        return json(results.map((c: any) => ({ 
-          ...c, 
-          createdAt: c.created_at 
-        })));
-      }
-      if (request.method === 'POST') {
-        const b = await request.json() as any;
-        await env.DB.prepare(
-          `INSERT OR REPLACE INTO loyal_customers (id, name, phone, address, created_at) VALUES (?, ?, ?, ?, ?)`
-        ).bind(b.id, b.name, b.phone || '', b.address || '', Date.now()).run();
-        return json({ success: true, id: b.id });
-      }
-    }
+// ── Loyal Customers ── (جديد)
+if (path === '/api/loyal-customers') {
+  if (request.method === 'GET') {
+    const { results } = await env.DB.prepare(`SELECT * FROM loyal_customers ORDER BY created_at DESC`).all();
+    return json(results.map((c: any) => ({ 
+      ...c, 
+      createdAt: c.created_at 
+    })));
+  }
+  if (request.method === 'POST') {
+    const b = await request.json() as any;
+    await env.DB.prepare(
+      `INSERT OR REPLACE INTO loyal_customers (id, name, phone, address, created_at) VALUES (?, ?, ?, ?, ?)`
+    ).bind(b.id, b.name, b.phone || '', b.address || '', Date.now()).run();
+    return json({ success: true, id: b.id });
+  }
+}
 
-    if (path.match(/^\/api\/loyal-customers\/[^/]+$/)) {
-      const id = path.split('/')[3];
-      if (request.method === 'PUT') {
-        const b = await request.json() as any;
-        await env.DB.prepare(
-          `UPDATE loyal_customers SET name=?, phone=?, address=? WHERE id=?`
-        ).bind(b.name, b.phone || '', b.address || '', id).run();
-        return json({ success: true });
-      }
-      if (request.method === 'DELETE') {
-        await env.DB.prepare(`DELETE FROM loyal_customers WHERE id=?`).bind(id).run();
-        return json({ success: true });
-      }
-    }
+// ✅ إضافة جديدة: جلب زبون محدد بـ ID (GET /api/loyal-customers/:id)
+if (path.match(/^\/api\/loyal-customers\/[^/]+$/) && request.method === 'GET') {
+  const id = path.split('/')[3];
+  const result = await env.DB.prepare(
+    `SELECT * FROM loyal_customers WHERE id = ?`
+  ).bind(id).first();
+  
+  if (!result) {
+    return json({ error: 'Customer not found' }, 404);
+  }
+  
+  return json({
+    ...result,
+    createdAt: (result as any).created_at
+  });
+}
+
+// PUT و DELETE للزبون الفردي
+if (path.match(/^\/api\/loyal-customers\/[^/]+$/) && request.method === 'PUT') {
+  const id = path.split('/')[3];
+  const b = await request.json() as any;
+  await env.DB.prepare(
+    `UPDATE loyal_customers SET name=?, phone=?, address=? WHERE id=?`
+  ).bind(b.name, b.phone || '', b.address || '', id).run();
+  return json({ success: true });
+}
+
+if (path.match(/^\/api\/loyal-customers\/[^/]+$/) && request.method === 'DELETE') {
+  const id = path.split('/')[3];
+  await env.DB.prepare(`DELETE FROM loyal_customers WHERE id=?`).bind(id).run();
+  return json({ success: true });
+}
 
     // ── Sales ── (محدث)
     if (path === '/api/sales') {
