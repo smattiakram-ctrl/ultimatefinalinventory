@@ -95,12 +95,7 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
   }, []);
 
   const filterProducts = (searchText: string) => {
-    console.log('🔍 filterProducts called with:', searchText, 'allProducts count:', allProducts.length);
-    
-    if (allProducts.length === 0) {
-      console.warn('⚠️ allProducts is empty!');
-      return [];
-    }
+    if (allProducts.length === 0) return [];
     
     if (!searchText.trim()) {
       return allProducts
@@ -122,7 +117,6 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
     onChange({ ...item, productName: val, productId: undefined });
     
     const filtered = filterProducts(val);
-    console.log('✅ Filtered suggestions:', filtered.length);
     setSuggestions(filtered);
     setShowSug(filtered.length > 0);
     setHighlighted(-1);
@@ -163,6 +157,7 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
   const handleQty = (val: number) => {
     const q = Math.max(1, val);
     
+    // تحقق من المخزون فقط إذا كان المنتج مختاراً من القائمة
     if (selectedProduct && q > (selectedProduct.quantity || 0)) {
       alert(`⚠️ المخزون المتاح فقط: ${selectedProduct.quantity} قطعة`);
       return;
@@ -200,7 +195,6 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
               value={query}
               onChange={e => handleNameChange(e.target.value)}
               onFocus={() => {
-                console.log('🔥 Input focused, loading suggestions...');
                 const filtered = filterProducts(query);
                 setSuggestions(filtered);
                 setShowSug(filtered.length > 0 || allProducts.length === 0);
@@ -213,10 +207,8 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
           
           {showSug && noProductsMessage}
           
-          {/* ⬇️⬇️⬇️ الكود المُصلح هنا ⬇️⬇️⬇️ */}
           {showSug && suggestions.length > 0 && (
             <>
-              {/* طبقة خلفية لإغلاق الاقتراحات عند النقر خارجها */}
               <div 
                 className="fixed inset-0 z-[9998] bg-transparent"
                 onClick={() => setShowSug(false)}
@@ -263,7 +255,6 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
               </ul>
             </>
           )}
-          {/* ⬆️⬆️⬆️ نهاية الكود المُصلح ⬆️⬆️⬆️ */}
           
           {showSug && query.trim() && suggestions.length === 0 && allProducts.length > 0 && (
             <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 p-3 text-sm text-gray-500">
@@ -273,19 +264,20 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
         </div>
       </td>
 
+      {/* ✅ الكمية - مفعلة دائماً */}
       <td className="p-2 w-24">
         <input
           type="number"
           min={1}
           max={selectedProduct?.quantity}
-          title={selectedProduct ? `المخزون المتاح: ${selectedProduct.quantity}` : ''}
+          title={selectedProduct ? `المخزون المتاح: ${selectedProduct.quantity}` : 'ادخل الكمية يدوياً'}
           className="w-full border border-gray-300 rounded-lg px-2 py-2 text-sm text-center outline-none focus:ring-2 focus:ring-blue-500"
           value={item.quantity}
           onChange={e => handleQty(Number(e.target.value))}
-          disabled={!selectedProduct}
         />
       </td>
 
+      {/* ✅ سعر الجملة - مفعل دائماً */}
       <td className="p-2 w-32">
         <div className="relative">
           <input
@@ -294,12 +286,12 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
             className="w-full border border-gray-300 rounded-lg px-2 py-2 text-sm text-center outline-none focus:ring-2 focus:ring-blue-500"
             value={item.wholesalePrice}
             onChange={e => handlePrice(Number(e.target.value))}
-            disabled={!selectedProduct}
           />
           <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">د.ج</span>
         </div>
       </td>
 
+      {/* المجموع */}
       <td className="p-2 w-32">
         <div className="relative">
           <input
@@ -346,14 +338,11 @@ function InvoiceForm({ customerId, allProducts: initialProducts, onSaved, onCanc
 
   useEffect(() => {
     if (allProducts.length === 0) {
-      console.log('🔄 Loading products...');
       setIsLoadingProducts(true);
       getProducts().then(products => {
-        console.log('✅ Loaded products:', products.length);
         setAllProducts(products);
         setIsLoadingProducts(false);
-      }).catch(err => {
-        console.error('❌ Failed to load products:', err);
+      }).catch(() => {
         setIsLoadingProducts(false);
       });
     }
@@ -551,23 +540,15 @@ export function CustomerDetail() {
     try {
       if (!id) return;
       
-      console.log('🔄 Loading customer data...');
       const customerData = await getLoyalCustomer(id);
-      console.log('✅ Customer:', customerData);
-      
-      console.log('🔄 Loading sales...');
       const sales = await getSalesByCustomer(id);
-      console.log('✅ Sales:', sales.length);
-      
-      console.log('🔄 Loading products...');
       const products = await getProducts();
-      console.log('✅ Products:', products.length);
 
       setCustomer(customerData);
       setInvoices(buildInvoices(sales));
       setAllProducts(products);
     } catch (err) {
-      console.error('❌ Error loading data:', err);
+      console.error('خطأ عام:', err);
     }
     setIsLoading(false);
   };
