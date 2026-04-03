@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getProducts } from '../db';
+import { getProducts, getCategories } from '../db';  // ✅ أضف getCategories
 import { Product } from '../db';
 import { AlertTriangle, ArrowRight, Package } from 'lucide-react';
 
@@ -8,8 +8,20 @@ export function LowStock() {
   const [products, setProducts] = useState<Product[]>([]);
 
   useEffect(() => {
-    getProducts().then(all => {
-const low = all.filter(p => p.quantity !== undefined && Number(p.quantity) <= 1);
+    // ✅ جلب المنتجات والأصناف معاً
+    Promise.all([getProducts(), getCategories()]).then(([all, categories]) => {
+      // ✅ إيجاد صنف "بطاريات الهاتف"
+      const batteryCategory = categories.find(c => 
+        c.name === 'بطاريات الهاتف'
+      );
+      
+      // ✅ تصفية المنتجات واستثناء البطاريات
+      const low = all.filter(p => 
+        p.quantity !== undefined && 
+        Number(p.quantity) <= 1 &&
+        p.categoryId !== batteryCategory?.id  // استثناء حسب categoryId
+      );
+      
       setProducts(low);
     });
   }, []);
