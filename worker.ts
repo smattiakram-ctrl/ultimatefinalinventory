@@ -183,7 +183,7 @@ export default {
       }
     }
 
-    // ✅ جديد: GET زبون محدد (مطلوب من CustomerDetail.tsx)
+    // ✅ GET زبون محدد (مع return!)
     if (path.match(/^\/api\/loyal-customers\/[^/]+$/) && request.method === 'GET') {
       const id = path.split('/')[3];
       const result = await env.DB.prepare(
@@ -200,6 +200,7 @@ export default {
       });
     }
 
+    // ✅ PUT زبون محدد (مع return!)
     if (path.match(/^\/api\/loyal-customers\/[^/]+$/) && request.method === 'PUT') {
       const id = path.split('/')[3];
       const b = await request.json() as any;
@@ -209,13 +210,14 @@ export default {
       return json({ success: true });
     }
 
+    // ✅ DELETE زبون محدد (مع return!)
     if (path.match(/^\/api\/loyal-customers\/[^/]+$/) && request.method === 'DELETE') {
       const id = path.split('/')[3];
       await env.DB.prepare(`DELETE FROM loyal_customers WHERE id=?`).bind(id).run();
       return json({ success: true });
     }
 
-    // ── Sales ── (مُعدّل: إضافة quantity مع التأمين)
+    // ── Sales ── (مُعدّل مع return!)
     if (path === '/api/sales') {
       if (request.method === 'GET') {
         const q = url.searchParams.get('q');
@@ -235,7 +237,6 @@ export default {
           results = r.results;
         }
         
-        // ✅ تأمين: إرجاع quantity دائماً (1 كقيمة افتراضية)
         return json(results.map((s: any) => ({ 
           ...s, 
           productId: s.product_id, 
@@ -250,7 +251,6 @@ export default {
       if (request.method === 'POST') {
         const b = await request.json() as any;
         
-        // ✅ محاولة الإدراج مع quantity، وإذا فشلت نحاول بدونه
         try {
           await env.DB.prepare(
             `INSERT INTO sales (id, product_id, product_name, selling_price, date, customer_id, payment_status, quantity, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -266,7 +266,7 @@ export default {
             Date.now()
           ).run();
         } catch (e) {
-          // fallback: إدراج بدون quantity (للتوافق مع الجداول القديمة)
+          // fallback: بدون quantity
           await env.DB.prepare(
             `INSERT INTO sales (id, product_id, product_name, selling_price, date, customer_id, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
           ).bind(
@@ -295,7 +295,7 @@ export default {
       return json({ total: (results[0] as any)?.total || 0 });
     }
 
-    // ✅ جديد: Profits API (مطلوب من db.ts)
+    // ✅ Profits API (مع return!)
     if (path === '/api/sales/profits') {
       try {
         const { results } = await env.DB.prepare(`
@@ -330,7 +330,7 @@ export default {
       }
     }
 
-    // تحديث حالة الدفع
+    // ✅ PUT مع return!
     if (path.match(/^\/api\/sales\/[^/]+$/) && request.method === 'PUT') {
       const id = path.split('/')[3];
       const b = await request.json() as any;
@@ -346,6 +346,7 @@ export default {
       return json({ success: true });
     }
 
+    // ✅ DELETE مع return!
     if (path.match(/^\/api\/sales\/[^/]+$/) && request.method === 'DELETE') {
       const id = path.split('/')[3];
       await env.DB.prepare(`DELETE FROM sales WHERE id=?`).bind(id).run();
