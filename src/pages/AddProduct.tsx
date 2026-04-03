@@ -33,28 +33,46 @@ export function AddProduct() {
     }
   };
 
+  // ✅ تم إصلاح هذه الدالة
   const startScanner = () => {
     setIsScanning(true);
     setTimeout(() => {
       const newScanner = new Html5QrcodeScanner(
-  "reader", 
-  { 
-    fps: 10, 
-    qrbox: { width: 250, height: 250 },
-    // نستخدم التفضيل بدلاً من الإجبار المطلق لتجنب الخطأ
-    videoConstraints: {
-      facingMode: "environment" 
-    }
-  }, 
-  false
-);
-        (error) => { console.warn(error); }
+        "reader", 
+        { 
+          fps: 10, 
+          qrbox: { width: 250, height: 250 },
+          videoConstraints: {
+            facingMode: "environment" 
+          }
+        }, 
+        false
+      );
+      
+      // ✅ إضافة دالة النجاح (success callback)
+      const onScanSuccess = (decodedText: string) => {
+        setBarcode(decodedText);
+        stopScanner(); // إيقاف الماسح بعد نجاح القراءة
+      };
+      
+      // ✅ إضافة دالة الخطأ (error callback) - اختيارية
+      const onScanFailure = (error: string) => {
+        // console.warn(`Code scan error = ${error}`);
+        // نتجاهل الأخطاء المتكررة أثناء المسح
+      };
+      
+      // ✅ render يأخذ دالتين: success و failure
+      newScanner.render(onScanSuccess, onScanFailure);
+      setScanner(newScanner);
     }, 100);
   };
 
   const stopScanner = () => {
-    if (scanner) scanner.clear();
+    if (scanner) {
+      scanner.clear();
+    }
     setIsScanning(false);
+    setScanner(null);
   };
 
   const handleSave = async () => {
