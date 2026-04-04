@@ -88,14 +88,21 @@ export function Home() {
 - آخر 5 مبيعات: ${sales.slice(0, 5).map(s => s.productName).join('، ') || 'لا يوجد'}
       `.trim();
 
-      const res = await fetch('/api/ai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: `${context}\n\nسؤال المستخدم: ${userMsg}` }),
-      });
-
-      const data = await res.json();
-      const reply = data?.response || 'لم أتمكن من الرد، حاول مجدداً.';
+const res = await fetch(
+  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`,
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      system_instruction: {
+        parts: [{ text: 'أنت مساعد ذكي لمتجر. أجب دائماً بالعربية بشكل مختصر ومفيد.' }]
+      },
+      contents: [{ parts: [{ text: `${context}\n\nسؤال المستخدم: ${userMsg}` }] }]
+    }),
+  }
+);
+const data = await res.json();
+const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'لم أتمكن من الرد.';
       setMessages(prev => [...prev, { role: 'assistant', text: reply }]);
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', text: '⚠️ حدث خطأ في الاتصال.' }]);
