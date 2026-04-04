@@ -63,6 +63,7 @@ export function Home() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // ✅ دالة الإرسال المُصحَّحة - تستخدم Worker endpoint
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
     const userMsg = input.trim();
@@ -71,48 +72,25 @@ export function Home() {
     setIsLoading(true);
 
     try {
-      const [products, categories, sales] = await Promise.all([
-        getProducts(),
-        getCategories(),
-        getSales(),
-      ]);
-
-      const context = `
-بيانات المتجر الحالية:
-- إجمالي السلع: ${products.length}
-- الأصناف (${categories.length}): ${categories.map(c => c.name).join('، ')}
-- السلع المنخفضة (أقل من 5): ${products.filter(p => (p.quantity || 0) < 5).map(p => `${p.name}(${p.quantity})`).join('، ') || 'لا يوجد'}
-- إجمالي المبيعات: ${sales.reduce((s, x) => s + (x.sellingPrice || 0), 0)} د.ج
-- عدد المبيعات: ${sales.length}
-- آخر 5 مبيعات: ${sales.slice(0, 5).map(s => s.productName).join('، ') || 'لا يوجد'}
-      `.trim();
-
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            system_instruction: {
-              parts: [{ text: 'أنت مساعد ذكي لمتجر. أجب دائماً بالعربية بشكل مختصر ومفيد.' }]
-            },
-            contents: [{ parts: [{ text: `${context}\n\nسؤال المستخدم: ${userMsg}` }] }]
-          }),
-        }
-      );
+      // ✅ استخدام Worker endpoint بدلاً من الاستدعاء المباشر للـ API
+      const res = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: userMsg })
+      });
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        console.error('Gemini API Error:', res.status, errorData);
+        console.error('API Error:', res.status, errorData);
         
         if (res.status === 429) {
-          throw new Error('تم تجاوز الحصة المجانية (1500 طلب/يوم). انتظر غداً.');
+          throw new Error('تم تجاوز الحصة المجانية. يرجى الانتظار.');
         }
-        throw new Error(errorData.error?.message || `خطأ HTTP: ${res.status}`);
+        throw new Error(errorData.error || `خطأ HTTP: ${res.status}`);
       }
 
       const data = await res.json();
-      const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'لم أتمكن من الرد.';
+      const reply = data?.response || 'لم أتمكن من الرد.';
       setMessages(prev => [...prev, { role: 'assistant', text: reply }]);
     } catch (error: any) {
       console.error('Chat Error:', error);
