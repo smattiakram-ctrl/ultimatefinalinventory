@@ -217,7 +217,7 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
   className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-2xl max-h-60 overflow-y-auto"
   style={{
     top: inputRef.current?.getBoundingClientRect().bottom ?? 0,
-    left: Math.max(8, Math.min(
+    left: Math.max(-30, Math.min(
       inputRef.current?.getBoundingClientRect().left ?? 0,
       window.innerWidth - 300 - 8
     )),
