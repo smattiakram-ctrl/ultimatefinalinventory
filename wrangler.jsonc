@@ -19,9 +19,9 @@
       "bucket_name": "my-nabil-app"
     }
   ],
- "vars": {
+  "vars": {
     "GITHUB_CLIENT_ID": "Ov23liwZoxgAkFRJrevF",
-    "GITHUB_CLIENT_SECRET": "e0441cec9ac8b991a26b4448666eeecfe04cebdf"
+    "GITHUB_CLIENT_SECRET": "e0441cec9ac8b991a26b4448666eeecfe04cebdf",
     "GEMINI_API_KEY": "AIzaSyD8GKcF1_zflI8CrPPwbX3zYvnoEVXVoGI"
-  },
+  }
 }
