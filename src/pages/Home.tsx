@@ -63,7 +63,6 @@ export function Home() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // ✅ دالة الإرسال المُصحَّحة - تستخدم Worker endpoint
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
     const userMsg = input.trim();
@@ -72,7 +71,6 @@ export function Home() {
     setIsLoading(true);
 
     try {
-      // ✅ استخدام Worker endpoint بدلاً من الاستدعاء المباشر للـ API
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
