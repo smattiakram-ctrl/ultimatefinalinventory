@@ -353,6 +353,20 @@ export default {
       await env.DB.prepare(`DELETE FROM sales WHERE id=?`).bind(id).run();
       return json({ success: true });
     }
+    // ── AI Chat ──
+if (path === '/api/ai/chat' && request.method === 'POST') {
+  const { message } = await request.json() as any;
+  const response = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
+    messages: [
+      { 
+        role: 'system', 
+        content: 'أنت مساعد ذكي لمتجر. تساعد في إدارة المخزون والمبيعات. أجب دائماً بالعربية.' 
+      },
+      { role: 'user', content: message }
+    ]
+  });
+  return json(response);
+}
 
     // ── Frontend ──
     if (path.startsWith('/api/')) {
