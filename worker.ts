@@ -293,13 +293,15 @@ export default {
       return json({ success: true });
     }
 
-    // ── Gemini AI Chat ──
+// ── Gemini AI Chat ──
     if (path === '/api/ai/chat' && request.method === 'POST') {
       try {
         const { message } = await request.json() as any;
 
+        // التصحيح 1: استخدم v1beta بدلاً من v1 إذا كنت تريد تعليمات النظام، أو v1 للطلبات العادية
+        // التصحيح 2: تأكد من اسم الموديل gemini-1.5-flash (أكثر استقراراً للمجاني)
         const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -307,12 +309,21 @@ export default {
               system_instruction: {
                 parts: [{ text: 'أنت مساعد ذكي لمتجر. تساعد في إدارة المخزون والمبيعات وتحليل البيانات. أجب دائماً بالعربية بشكل مختصر ومفيد.' }]
               },
-              contents: [{ parts: [{ text: message }] }]
+              contents: [{ 
+                role: "user", // التصحيح 3: إضافة الـ role ضروري في بعض النسخ
+                parts: [{ text: message }] 
+              }]
             }),
           }
         );
 
         const data = await geminiRes.json() as any;
+
+        // فحص إذا كان هناك خطأ من جوجل نفسه (مثل Rate Limit 429)
+        if (data.error) {
+          return json({ response: `خطأ من جوجل: ${data.error.message}` }, 400);
+        }
+
         const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'لم أتمكن من الرد.';
         return json({ response: reply });
       } catch (error: any) {
