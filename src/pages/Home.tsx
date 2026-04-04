@@ -88,7 +88,7 @@ export function Home() {
       `.trim();
 
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -106,7 +106,7 @@ export function Home() {
         console.error('Gemini API Error:', res.status, errorData);
         
         if (res.status === 429) {
-          throw new Error('تم تجاوز الحصة المجانية (1500 طلب/يوم). انتظر غداً أو استخدم مفتاحاً آخر.');
+          throw new Error('تم تجاوز الحصة المجانية (1500 طلب/يوم). انتظر غداً.');
         }
         throw new Error(errorData.error?.message || `خطأ HTTP: ${res.status}`);
       }
@@ -242,7 +242,7 @@ export function Home() {
               <div className="flex items-center gap-2 text-white">
                 <Bot size={22} />
                 <span className="font-bold text-lg">المساعد الذكي</span>
-                <span className="text-xs bg-purple-500 px-2 py-0.5 rounded-full">Gemini</span>
+                <span className="text-xs bg-purple-500 px-2 py-0.5 rounded-full">Gemini 2.5</span>
               </div>
               <button onClick={() => setShowAI(false)} className="text-white hover:text-purple-200 transition">
                 <X size={22} />
