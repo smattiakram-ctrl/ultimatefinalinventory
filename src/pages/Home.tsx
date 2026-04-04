@@ -71,7 +71,6 @@ export function Home() {
     setIsLoading(true);
 
     try {
-      // جلب بيانات المتجر وإرسالها مع السؤال
       const [products, categories, sales] = await Promise.all([
         getProducts(),
         getCategories(),
@@ -88,23 +87,39 @@ export function Home() {
 - آخر 5 مبيعات: ${sales.slice(0, 5).map(s => s.productName).join('، ') || 'لا يوجد'}
       `.trim();
 
-const res = await fetch(
-  `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      system_instruction: {
-        parts: [{ text: 'أنت مساعد ذكي لمتجر. أجب دائماً بالعربية بشكل مختصر ومفيد.' }]
-      },
-      contents: [{ parts: [{ text: `${context}\n\nسؤال المستخدم: ${userMsg}` }] }]
-    }),
-  }
-);
-const data = await res.json();
-const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'لم أتمكن من الرد.';
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: {
+              parts: [{ text: 'أنت مساعد ذكي لمتجر. أجب دائماً بالعربية بشكل مختصر ومفيد.' }]
+            },
+            contents: [{ parts: [{ text: `${context}\n\nسؤال المستخدم: ${userMsg}` }] }]
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error('Gemini API Error:', res.status, errorData);
+        
+        if (res.status === 429) {
+          throw new Error('تم تجاوز الحصة المجانية (1500 طلب/يوم). انتظر غداً أو استخدم مفتاحاً آخر.');
+        }
+        throw new Error(errorData.error?.message || `خطأ HTTP: ${res.status}`);
+      }
+
+      const data = await res.json();
+      const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'لم أتمكن من الرد.';
       setMessages(prev => [...prev, { role: 'assistant', text: reply }]);
-    } catch {
-      setMessages(prev => [...prev, { role: 'assistant', text: '⚠️ حدث خطأ في الاتصال.' }]);
+    } catch (error: any) {
+      console.error('Chat Error:', error);
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        text: `⚠️ ${error.message || 'حدث خطأ في الاتصال.'}` 
+      }]);
     } finally {
       setIsLoading(false);
     }
@@ -136,7 +151,6 @@ const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'لم أتمك
         </div>
       </header>
 
-      {/* كروت الإحصائيات */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
           <div className="bg-blue-100 p-3 rounded-lg text-blue-600"><Package size={24} /></div>
@@ -175,7 +189,6 @@ const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'لم أتمك
         </Link>
       </div>
 
-      {/* قسم البحث */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
         <h2 className="text-xl font-bold text-gray-900 mb-4">البحث عن السلع</h2>
         <div className="relative">
@@ -222,7 +235,6 @@ const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'لم أتمك
         )}
       </div>
 
-      {/* نافذة المساعد الذكي */}
       {showAI && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" dir="rtl">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col" style={{ height: '520px' }}>
