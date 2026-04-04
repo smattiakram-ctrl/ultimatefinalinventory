@@ -214,16 +214,17 @@ function ItemRow({ item, allProducts, onChange, onRemove }: ItemRowProps) {
                 onClick={() => setShowSug(false)}
               />
               <ul 
-              className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-2xl max-h-60 overflow-y-auto"
-              style={{
-                top: inputRef.current?.getBoundingClientRect().bottom ?? 0,
-                left: Math.max(8, Math.min(
-                  inputRef.current?.getBoundingClientRect().left ?? 0,
-                  window.innerWidth - 300 - 8
-                )),
-                width: Math.min(350, window.innerWidth - 16),
-              }}
-        >ons.map((p, idx) => (
+  className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-2xl max-h-60 overflow-y-auto"
+  style={{
+    top: inputRef.current?.getBoundingClientRect().bottom ?? 0,
+    left: Math.max(8, Math.min(
+      inputRef.current?.getBoundingClientRect().left ?? 0,
+      window.innerWidth - 300 - 8
+    )),
+    width: Math.min(350, window.innerWidth - 16),
+  }}
+>
+  {suggestions.map((p, idx) => (
           <li
                     key={p.id}
                     onClick={(e) => {
