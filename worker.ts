@@ -293,15 +293,14 @@ export default {
       return json({ success: true });
     }
 
-// ── Gemini AI Chat ──
+    // ── Gemini AI Chat ──
     if (path === '/api/ai/chat' && request.method === 'POST') {
       try {
         const { message } = await request.json() as any;
 
-        // التصحيح 1: استخدم v1beta بدلاً من v1 إذا كنت تريد تعليمات النظام، أو v1 للطلبات العادية
-        // التصحيح 2: تأكد من اسم الموديل gemini-1.5-flash (أكثر استقراراً للمجاني)
+        // ✅ استخدم gemini-2.5-flash (المجاني والمتوفر)
         const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -310,23 +309,40 @@ export default {
                 parts: [{ text: 'أنت مساعد ذكي لمتجر. تساعد في إدارة المخزون والمبيعات وتحليل البيانات. أجب دائماً بالعربية بشكل مختصر ومفيد.' }]
               },
               contents: [{ 
-                role: "user", // التصحيح 3: إضافة الـ role ضروري في بعض النسخ
+                role: "user",
                 parts: [{ text: message }] 
               }]
             }),
           }
         );
 
+        // ✅ معالجة أخطاء HTTP
+        if (!geminiRes.ok) {
+          const errorData = await geminiRes.json().catch(() => ({}));
+          console.error('Gemini API Error in Worker:', geminiRes.status, errorData);
+          
+          if (geminiRes.status === 429) {
+            return json({ 
+              response: '⚠️ تم تجاوز الحصة المجانية (1500 طلب/يوم). يرجى الانتظار حتى الغد أو استخدام مفتاح API آخر.' 
+            }, 429);
+          }
+          
+          return json({ 
+            response: `⚠️ خطأ من Gemini API: ${errorData.error?.message || `HTTP ${geminiRes.status}`}` 
+          }, 500);
+        }
+
         const data = await geminiRes.json() as any;
 
-        // فحص إذا كان هناك خطأ من جوجل نفسه (مثل Rate Limit 429)
+        // فحص إذا كان هناك خطأ من جوجل نفسه
         if (data.error) {
-          return json({ response: `خطأ من جوجل: ${data.error.message}` }, 400);
+          return json({ response: `⚠️ خطأ من جوجل: ${data.error.message}` }, 400);
         }
 
         const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'لم أتمكن من الرد.';
         return json({ response: reply });
       } catch (error: any) {
+        console.error('Worker AI Error:', error);
         return json({ error: error.message }, 500);
       }
     }
