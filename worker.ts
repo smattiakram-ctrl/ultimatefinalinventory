@@ -4,6 +4,7 @@ export interface Env {
   ASSETS: Fetcher;
   GITHUB_CLIENT_ID: string;
   GITHUB_CLIENT_SECRET: string;
+  GEMINI_API_KEY: string;
 }
 
 const cors = {
@@ -121,11 +122,11 @@ export default {
           const r = await env.DB.prepare(`SELECT * FROM products ORDER BY created_at DESC`).all();
           results = r.results;
         }
-        return json(results.map((p: any) => ({ 
-          ...p, 
-          categoryId: p.category_id, 
-          wholesalePrice: p.wholesale_price, 
-          retailPrice: p.retail_price 
+        return json(results.map((p: any) => ({
+          ...p,
+          categoryId: p.category_id,
+          wholesalePrice: p.wholesale_price,
+          retailPrice: p.retail_price
         })));
       }
       if (request.method === 'POST') {
@@ -142,11 +143,11 @@ export default {
       const { results } = await env.DB.prepare(
         `SELECT * FROM products WHERE name LIKE ? OR barcode LIKE ? LIMIT 10`
       ).bind(`%${q}%`, `%${q}%`).all();
-      return json(results.map((p: any) => ({ 
-        ...p, 
-        categoryId: p.category_id, 
-        wholesalePrice: p.wholesale_price, 
-        retailPrice: p.retail_price 
+      return json(results.map((p: any) => ({
+        ...p,
+        categoryId: p.category_id,
+        wholesalePrice: p.wholesale_price,
+        retailPrice: p.retail_price
       })));
     }
 
@@ -169,9 +170,9 @@ export default {
     if (path === '/api/loyal-customers') {
       if (request.method === 'GET') {
         const { results } = await env.DB.prepare(`SELECT * FROM loyal_customers ORDER BY created_at DESC`).all();
-        return json(results.map((c: any) => ({ 
-          ...c, 
-          createdAt: c.created_at 
+        return json(results.map((c: any) => ({
+          ...c,
+          createdAt: c.created_at
         })));
       }
       if (request.method === 'POST') {
@@ -183,51 +184,35 @@ export default {
       }
     }
 
-    // ✅ GET زبون محدد (مع return!)
     if (path.match(/^\/api\/loyal-customers\/[^/]+$/) && request.method === 'GET') {
       const id = path.split('/')[3];
-      const result = await env.DB.prepare(
-        `SELECT * FROM loyal_customers WHERE id = ?`
-      ).bind(id).first();
-      
-      if (!result) {
-        return json({ error: 'Customer not found' }, 404);
-      }
-      
-      return json({
-        ...result,
-        createdAt: (result as any).created_at
-      });
+      const result = await env.DB.prepare(`SELECT * FROM loyal_customers WHERE id = ?`).bind(id).first();
+      if (!result) return json({ error: 'Customer not found' }, 404);
+      return json({ ...result, createdAt: (result as any).created_at });
     }
 
-    // ✅ PUT زبون محدد (مع return!)
     if (path.match(/^\/api\/loyal-customers\/[^/]+$/) && request.method === 'PUT') {
       const id = path.split('/')[3];
       const b = await request.json() as any;
-      await env.DB.prepare(
-        `UPDATE loyal_customers SET name=?, phone=?, address=? WHERE id=?`
-      ).bind(b.name, b.phone || '', b.address || '', id).run();
+      await env.DB.prepare(`UPDATE loyal_customers SET name=?, phone=?, address=? WHERE id=?`)
+        .bind(b.name, b.phone || '', b.address || '', id).run();
       return json({ success: true });
     }
 
-    // ✅ DELETE زبون محدد (مع return!)
     if (path.match(/^\/api\/loyal-customers\/[^/]+$/) && request.method === 'DELETE') {
       const id = path.split('/')[3];
       await env.DB.prepare(`DELETE FROM loyal_customers WHERE id=?`).bind(id).run();
       return json({ success: true });
     }
 
-    // ── Sales ── (مُعدّل مع return!)
+    // ── Sales ──
     if (path === '/api/sales') {
       if (request.method === 'GET') {
         const q = url.searchParams.get('q');
         const customerId = url.searchParams.get('customerId');
         let results;
-
         if (customerId) {
-          const r = await env.DB.prepare(
-            `SELECT * FROM sales WHERE customer_id=? ORDER BY date DESC`
-          ).bind(customerId).all();
+          const r = await env.DB.prepare(`SELECT * FROM sales WHERE customer_id=? ORDER BY date DESC`).bind(customerId).all();
           results = r.results;
         } else if (q) {
           const r = await env.DB.prepare(`SELECT * FROM sales WHERE product_name LIKE ? ORDER BY date DESC`).bind(`%${q}%`).all();
@@ -236,54 +221,29 @@ export default {
           const r = await env.DB.prepare(`SELECT * FROM sales ORDER BY date DESC`).all();
           results = r.results;
         }
-        
-        return json(results.map((s: any) => ({ 
-          ...s, 
-          productId: s.product_id, 
-          productName: s.product_name, 
+        return json(results.map((s: any) => ({
+          ...s,
+          productId: s.product_id,
+          productName: s.product_name,
           sellingPrice: s.selling_price,
           customerId: s.customer_id,
           paymentStatus: s.payment_status || 'unpaid',
           quantity: s.quantity || 1
         })));
       }
-      
       if (request.method === 'POST') {
         const b = await request.json() as any;
-        
         try {
           await env.DB.prepare(
             `INSERT INTO sales (id, product_id, product_name, selling_price, date, customer_id, payment_status, quantity, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-          ).bind(
-            b.id, 
-            b.productId || null, 
-            b.productName, 
-            b.sellingPrice, 
-            b.date, 
-            b.customerId || null,
-            b.paymentStatus || 'unpaid',
-            b.quantity || 1,
-            Date.now()
-          ).run();
+          ).bind(b.id, b.productId || null, b.productName, b.sellingPrice, b.date, b.customerId || null, b.paymentStatus || 'unpaid', b.quantity || 1, Date.now()).run();
         } catch (e) {
-          // fallback: بدون quantity
           await env.DB.prepare(
             `INSERT INTO sales (id, product_id, product_name, selling_price, date, customer_id, payment_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-          ).bind(
-            b.id, 
-            b.productId || null, 
-            b.productName, 
-            b.sellingPrice, 
-            b.date, 
-            b.customerId || null,
-            b.paymentStatus || 'unpaid',
-            Date.now()
-          ).run();
+          ).bind(b.id, b.productId || null, b.productName, b.sellingPrice, b.date, b.customerId || null, b.paymentStatus || 'unpaid', Date.now()).run();
         }
-        
         return json({ success: true });
       }
-      
       if (request.method === 'DELETE') {
         await env.DB.prepare(`DELETE FROM sales`).run();
         return json({ success: true });
@@ -295,77 +255,70 @@ export default {
       return json({ total: (results[0] as any)?.total || 0 });
     }
 
-    // ✅ Profits API (مع return!)
     if (path === '/api/sales/profits') {
       try {
         const { results } = await env.DB.prepare(`
-          SELECT 
-            s.selling_price as revenue,
-            p.wholesale_price as cost,
-            s.quantity as qty
-          FROM sales s
-          LEFT JOIN products p ON s.product_id = p.id
+          SELECT s.selling_price as revenue, p.wholesale_price as cost, s.quantity as qty
+          FROM sales s LEFT JOIN products p ON s.product_id = p.id
           WHERE s.payment_status = 'paid'
         `).all();
-        
         let totalRevenue = 0;
         let totalCost = 0;
-        
         for (const row of results) {
           const r = row as any;
           const qty = r.qty || 1;
           totalRevenue += r.revenue || 0;
-          if (r.cost) {
-            totalCost += r.cost * qty;
-          }
+          if (r.cost) totalCost += r.cost * qty;
         }
-        
-        return json({
-          totalRevenue,
-          totalCost,
-          profit: totalRevenue - totalCost
-        });
+        return json({ totalRevenue, totalCost, profit: totalRevenue - totalCost });
       } catch (error: any) {
         return json({ error: error.message }, 500);
       }
     }
 
-    // ✅ PUT مع return!
     if (path.match(/^\/api\/sales\/[^/]+$/) && request.method === 'PUT') {
       const id = path.split('/')[3];
       const b = await request.json() as any;
-
       if (b.paymentStatus) {
-        await env.DB.prepare(
-          `UPDATE sales SET payment_status=? WHERE id=?`
-        ).bind(b.paymentStatus, id).run();
+        await env.DB.prepare(`UPDATE sales SET payment_status=? WHERE id=?`).bind(b.paymentStatus, id).run();
         return json({ success: true });
       }
-
       await env.DB.prepare(`DELETE FROM sales WHERE id=?`).bind(id).run();
       return json({ success: true });
     }
 
-    // ✅ DELETE مع return!
     if (path.match(/^\/api\/sales\/[^/]+$/) && request.method === 'DELETE') {
       const id = path.split('/')[3];
       await env.DB.prepare(`DELETE FROM sales WHERE id=?`).bind(id).run();
       return json({ success: true });
     }
-    // ── AI Chat ──
-if (path === '/api/ai/chat' && request.method === 'POST') {
-  const { message } = await request.json() as any;
-  const response = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
-    messages: [
-      { 
-        role: 'system', 
-        content: 'أنت مساعد ذكي لمتجر. تساعد في إدارة المخزون والمبيعات. أجب دائماً بالعربية.' 
-      },
-      { role: 'user', content: message }
-    ]
-  });
-  return json(response);
-}
+
+    // ── Gemini AI Chat ──
+    if (path === '/api/ai/chat' && request.method === 'POST') {
+      try {
+        const { message } = await request.json() as any;
+
+        const geminiRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              system_instruction: {
+                parts: [{ text: 'أنت مساعد ذكي لمتجر. تساعد في إدارة المخزون والمبيعات وتحليل البيانات. أجب دائماً بالعربية بشكل مختصر ومفيد.' }]
+              },
+              contents: [{ parts: [{ text: message }] }]
+            }),
+          }
+        );
+
+        const data = await geminiRes.json() as any;
+        const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'لم أتمكن من الرد.';
+        return json({ response: reply });
+      } catch (error: any) {
+        return json({ error: error.message }, 500);
+      }
+    }
 
     // ── Frontend ──
     if (path.startsWith('/api/')) {
