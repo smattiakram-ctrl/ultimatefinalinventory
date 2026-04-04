@@ -354,6 +354,10 @@ export default {
     }
 
     // ── Frontend ──
-    return env.ASSETS.fetch(request);
+    if (path.startsWith('/api/')) {
+      return new Response('Not found', { status: 404 });
+    }
+    const indexRequest = new Request(new URL('/', request.url).toString(), request);
+    return env.ASSETS.fetch(indexRequest);
   },
 };
