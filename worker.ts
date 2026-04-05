@@ -306,6 +306,44 @@ export default {
 
         const { message } = await request.json() as any;
 
+        // ✅ جلب البيانات من قاعدة البيانات للسياق
+        const [products, categories, sales, customers] = await Promise.all([
+          env.DB.prepare(`SELECT * FROM products ORDER BY created_at DESC LIMIT 50`).all().then(r => r.results),
+          env.DB.prepare(`SELECT * FROM categories ORDER BY created_at DESC`).all().then(r => r.results),
+          env.DB.prepare(`SELECT * FROM sales ORDER BY date DESC LIMIT 20`).all().then(r => r.results),
+          env.DB.prepare(`SELECT * FROM loyal_customers ORDER BY created_at DESC LIMIT 20`).all().then(r => r.results),
+        ]);
+
+        // ✅ حساب إحصائيات سريعة
+        const totalProducts = products.length;
+        const lowStockProducts = products.filter((p: any) => (p.quantity || 0) <= 5);
+        const totalSales = sales.reduce((sum: number, s: any) => sum + (s.selling_price || 0), 0);
+        const unpaidSales = sales.filter((s: any) => s.payment_status === 'unpaid');
+        
+        // ✅ بناء السياق للـ AI
+        const context = `
+بيانات المتجر الحالية (تاريخ: ${new Date().toLocaleDateString('ar-DZ')}):
+
+📦 المنتجات (${totalProducts} منتج):
+${products.slice(0, 10).map((p: any) => `- ${p.name}: ${p.quantity || 0} قطعة (سعر: ${p.retail_price || 'غير محدد'} د.ج)`).join('\n')}
+${products.length > 10 ? `... و ${products.length - 10} منتجات أخرى` : ''}
+
+⚠️ منتجات منخفضة المخزون (${lowStockProducts.length}):
+${lowStockProducts.slice(0, 5).map((p: any) => `- ${p.name}: ${p.quantity || 0} قطعة`).join('\n') || 'لا يوجد'}
+
+📂 الأصناف (${categories.length}):
+${categories.map((c: any) => `- ${c.name}`).join('\n')}
+
+💰 المبيعات الأخيرة (${sales.length} عملية - المجموع: ${totalSales} د.ج):
+${sales.slice(0, 5).map((s: any) => `- ${s.product_name}: ${s.selling_price} د.ج (${s.payment_status === 'paid' ? 'مدفوع' : 'غير مدفوع'})`).join('\n')}
+
+💳 مبيعات غير مدفوعة (${unpaidSales.length}):
+${unpaidSales.slice(0, 5).map((s: any) => `- ${s.product_name}: ${s.selling_price} د.ج`).join('\n') || 'لا يوجد'}
+
+👥 العملاء المميزون (${customers.length}):
+${customers.slice(0, 5).map((c: any) => `- ${c.name} (${c.phone || 'لا يوجد رقم'})`).join('\n') || 'لا يوجد'}
+`.trim();
+
         const geminiRes = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
           {
@@ -313,11 +351,19 @@ export default {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               system_instruction: {
-                parts: [{ text: 'أنت مساعد ذكي لمتجر. تساعد في إدارة المخزون والمبيعات وتحليل البيانات. أجب دائماً بالعربية بشكل مختصر ومفيد.' }]
+                parts: [{ 
+                  text: `أنت مساعد ذكي لمتجر إلكتروني. لديك access لبيانات المتجر في الوقت الفعلي.
+أجب دائماً بالعربية الجزائرية (دارجة) بشكل مختصر ومفيد.
+استخدم البيانات المقدمة للإجابة على أسئلة المستخدم.
+إذا سأل عن منتج معين، ابحث في قائمة المنتجات وقدم تفاصيله.
+إذا سأل عن المخزون، أخبره بالمنتجات المنخفضة.
+إذا سأل عن المبيعات، أعطه الإحصائيات.
+كن ودوداً ومهنياً.` 
+                }]
               },
               contents: [{ 
                 role: "user",
-                parts: [{ text: message }] 
+                parts: [{ text: `${context}\n\nسؤال المستخدم: ${message}` }] 
               }]
             }),
           }
