@@ -296,9 +296,16 @@ export default {
     // ── Gemini AI Chat ──
     if (path === '/api/ai/chat' && request.method === 'POST') {
       try {
+        // ✅ التحقق من وجود المفتاح
+        if (!env.GEMINI_API_KEY) {
+          console.error('GEMINI_API_KEY is not set in environment');
+          return json({ 
+            response: '⚠️ لم يتم إعداد مفتاح Gemini API. يرجى إضافته كـ Secret في Cloudflare.' 
+          }, 500);
+        }
+
         const { message } = await request.json() as any;
 
-        // ✅ استخدم gemini-2.5-flash (المجاني والمتوفر)
         const geminiRes = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
           {
@@ -316,14 +323,19 @@ export default {
           }
         );
 
-        // ✅ معالجة أخطاء HTTP
         if (!geminiRes.ok) {
           const errorData = await geminiRes.json().catch(() => ({}));
-          console.error('Gemini API Error in Worker:', geminiRes.status, errorData);
+          console.error('Gemini API Error:', geminiRes.status, errorData);
+          
+          if (geminiRes.status === 400 && errorData.error?.message?.includes('API key not valid')) {
+            return json({ 
+              response: '⚠️ مفتاح Gemini API غير صالح. يرجى التحقق من المفتاح في إعدادات Cloudflare.' 
+            }, 500);
+          }
           
           if (geminiRes.status === 429) {
             return json({ 
-              response: '⚠️ تم تجاوز الحصة المجانية (1500 طلب/يوم). يرجى الانتظار حتى الغد أو استخدام مفتاح API آخر.' 
+              response: '⚠️ تم تجاوز الحصة المجانية (1500 طلب/يوم). يرجى الانتظار حتى الغد.' 
             }, 429);
           }
           
@@ -334,9 +346,8 @@ export default {
 
         const data = await geminiRes.json() as any;
 
-        // فحص إذا كان هناك خطأ من جوجل نفسه
         if (data.error) {
-          return json({ response: `⚠️ خطأ من جوجل: ${data.error.message}` }, 400);
+          return json({ response: `⚠️ خطأ: ${data.error.message}` }, 400);
         }
 
         const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'لم أتمكن من الرد.';
