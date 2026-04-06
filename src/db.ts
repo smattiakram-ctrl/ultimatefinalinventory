@@ -24,7 +24,7 @@ export interface Sale {
   date: string;
   customerId?: string;
   paymentStatus?: 'paid' | 'unpaid';
-  quantity?: number; // ← جديد: لتتبع الكمية المباعة
+  quantity?: number;
 }
 
 export interface LoyalCustomer {
