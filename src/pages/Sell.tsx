@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react';
 import { Product, searchProducts, updateProduct, addSale } from '../db';
-import { Search, Camera, ShoppingCart, CheckCircle2 } from 'lucide-react';
+import { Search, Camera, ShoppingCart, CheckCircle2, Plus, Minus } from 'lucide-react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 
 export function Sell() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [quantity, setQuantity] = useState(1);
   const [sellingPrice, setSellingPrice] = useState<number | ''>('');
   const [successMessage, setSuccessMessage] = useState('');
   const [searchResults, setSearchResults] = useState<Product[]>([]);
   const [scanner, setScanner] = useState<Html5QrcodeScanner | null>(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (!searchQuery) { setSearchResults([]); return; }
@@ -46,29 +48,58 @@ export function Sell() {
   const handleSelectProduct = (product: Product) => {
     setSelectedProduct(product);
     setSellingPrice(product.retailPrice || '');
+    setQuantity(1);
+    setError('');
     setSearchQuery('');
     setSearchResults([]);
   };
 
+  const handleQuantityChange = (newQuantity: number) => {
+    if (!selectedProduct) return;
+    
+    const maxQuantity = selectedProduct.quantity || 0;
+    
+    if (newQuantity < 1) {
+      setQuantity(1);
+    } else if (newQuantity > maxQuantity) {
+      setError(`الكمية المتاحة: ${maxQuantity} فقط`);
+      setQuantity(maxQuantity);
+    } else {
+      setError('');
+      setQuantity(newQuantity);
+    }
+  };
+
+  const incrementQuantity = () => handleQuantityChange(quantity + 1);
+  const decrementQuantity = () => handleQuantityChange(quantity - 1);
+
   const handleSell = async () => {
     if (!selectedProduct || sellingPrice === '') return;
+
+    const totalPrice = Number(sellingPrice) * quantity;
 
     await addSale({
       productId: selectedProduct.id,
       productName: selectedProduct.name,
-      sellingPrice: Number(sellingPrice),
+      sellingPrice: totalPrice,
       date: new Date().toISOString(),
+      quantity: quantity, // ← إرسال الكمية مع عملية البيع
     });
 
-    if (selectedProduct.quantity && selectedProduct.quantity > 0) {
-      await updateProduct(selectedProduct.id!, { quantity: selectedProduct.quantity - 1 });
+    if (selectedProduct.quantity && selectedProduct.quantity >= quantity) {
+      await updateProduct(selectedProduct.id!, { quantity: selectedProduct.quantity - quantity });
     }
 
-    setSuccessMessage(`تم بيع "${selectedProduct.name}" بنجاح!`);
+    setSuccessMessage(`تم بيع ${quantity} × "${selectedProduct.name}" بمبلغ ${totalPrice} د.ج!`);
     setSelectedProduct(null);
     setSellingPrice('');
+    setQuantity(1);
+    setError('');
     setTimeout(() => setSuccessMessage(''), 3000);
   };
+
+  // حساب الإجمالي
+  const totalPrice = sellingPrice !== '' ? Number(sellingPrice) * quantity : 0;
 
   return (
     <div className="max-w-3xl mx-auto space-y-6" dir="rtl">
@@ -116,7 +147,7 @@ export function Sell() {
                   </div>
                   <div className="text-left">
                     <p className="font-medium text-green-600">{product.retailPrice ? `${product.retailPrice} د.ج` : '-'}</p>
-                    <p className="text-xs text-gray-500">الكمية: {product.quantity || 0}</p>
+                    <p className="text-xs text-gray-500">المخزون: {product.quantity || 0}</p>
                   </div>
                 </li>
               ))}
@@ -149,16 +180,59 @@ export function Sell() {
               </div>
             </div>
           </div>
+
+          {/* التحكم في الكمية - جديد */}
+          <div className="border-t border-gray-100 pt-4 mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">الكمية المباعة</label>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={decrementQuantity}
+                disabled={quantity <= 1}
+                className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                <Minus size={20} className="text-gray-700" />
+              </button>
+              
+              <input
+                type="number"
+                min="1"
+                max={selectedProduct.quantity || 0}
+                value={quantity}
+                onChange={(e) => handleQuantityChange(parseInt(e.target.value) || 1)}
+                className="w-24 text-center py-3 border-2 border-blue-300 rounded-lg focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none text-xl font-bold"
+              />
+              
+              <button
+                onClick={incrementQuantity}
+                disabled={quantity >= (selectedProduct.quantity || 0)}
+                className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                <Plus size={20} className="text-gray-700" />
+              </button>
+            </div>
+            {error && (
+              <p className="text-red-500 text-sm mt-2">{error}</p>
+            )}
+          </div>
+
           <div className="border-t border-gray-100 pt-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">سعر البيع (د.ج)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">سعر البيع للوحدة (د.ج)</label>
             <div className="flex gap-4">
               <input type="number" value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value ? Number(e.target.value) : '')}
                 className="flex-1 p-4 border-2 border-blue-300 rounded-lg focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none text-2xl font-bold text-center" placeholder="0.00" />
-              <button onClick={handleSell} disabled={sellingPrice === ''}
-                className="bg-green-600 text-white px-8 py-4 rounded-lg hover:bg-green-700 disabled:opacity-50 transition text-xl font-bold flex items-center gap-2">
-                <CheckCircle2 size={28} /> تأكيد البيع
-              </button>
             </div>
+            
+            {/* عرض الإجمالي - جديد */}
+            <div className="mt-4 bg-green-50 border-2 border-green-200 rounded-lg p-4 text-center">
+              <p className="text-sm text-green-700 mb-1">الإجمالي</p>
+              <p className="text-3xl font-bold text-green-600">{totalPrice} د.ج</p>
+              <p className="text-sm text-green-600 mt-1">{quantity} × {sellingPrice || 0} د.ج</p>
+            </div>
+
+            <button onClick={handleSell} disabled={sellingPrice === '' || quantity < 1 || quantity > (selectedProduct.quantity || 0)}
+              className="w-full mt-4 bg-green-600 text-white px-8 py-4 rounded-lg hover:bg-green-700 disabled:opacity-50 transition text-xl font-bold flex items-center justify-center gap-2">
+              <CheckCircle2 size={28} /> تأكيد البيع
+            </button>
           </div>
         </div>
       )}
