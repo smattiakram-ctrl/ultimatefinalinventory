@@ -1,142 +1,257 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Sale, getSales, deleteSale, clearSales, getTotalSales } from '../db';
-import { Search, Trash2, Calendar, RefreshCcw, Package } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Product, searchProducts, updateProduct, addSale } from '../db';
+import { Search, Camera, ShoppingCart, CheckCircle2, Plus, Minus } from 'lucide-react';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 
-export function Sales() {
+export function Sell() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [sales, setSales] = useState<Sale[]>([]);
-  const [totalProfits, setTotalProfits] = useState(0);
+  const [isScanning, setIsScanning] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [quantity, setQuantity] = useState(1);
+  const [sellingPrice, setSellingPrice] = useState<number | ''>('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [searchResults, setSearchResults] = useState<Product[]>([]);
+  const [scanner, setScanner] = useState<Html5QrcodeScanner | null>(null);
+  const [error, setError] = useState('');
 
-  const loadSales = useCallback(async () => {
-    const [data, total] = await Promise.all([getSales(searchQuery || undefined), getTotalSales()]);
-    setSales(data);
-    setTotalProfits(total);
+  useEffect(() => {
+    if (!searchQuery) { setSearchResults([]); return; }
+    const timer = setTimeout(async () => {
+      const results = await searchProducts(searchQuery);
+      setSearchResults(results);
+      if (results.length === 1 && results[0].barcode === searchQuery) {
+        handleSelectProduct(results[0]);
+        setSearchQuery('');
+        setSearchResults([]);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  useEffect(() => { loadSales(); }, [loadSales]);
+  const startScanner = () => {
+    setIsScanning(true);
+    setTimeout(() => {
+      const newScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: { width: 250, height: 250 } }, false);
+      setScanner(newScanner);
+      newScanner.render(
+        (decodedText) => { setSearchQuery(decodedText); newScanner.clear(); setIsScanning(false); },
+        (error) => { console.warn(error); }
+      );
+    }, 100);
+  };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('هل أنت متأكد من حذف هذا السجل؟')) {
-      await deleteSale(id);
-      await loadSales();
+  const stopScanner = () => {
+    if (scanner) scanner.clear();
+    setIsScanning(false);
+  };
+
+  const handleSelectProduct = (product: Product) => {
+    setSelectedProduct(product);
+    setSellingPrice(product.retailPrice || '');
+    setQuantity(1);
+    setError('');
+    setSearchQuery('');
+    setSearchResults([]);
+  };
+
+  const handleQuantityChange = (newQuantity: number) => {
+    if (!selectedProduct) return;
+    
+    const maxQuantity = selectedProduct.quantity || 0;
+    
+    if (newQuantity < 1) {
+      setQuantity(1);
+    } else if (newQuantity > maxQuantity) {
+      setError(`الكمية المتاحة: ${maxQuantity} فقط`);
+      setQuantity(maxQuantity);
+    } else {
+      setError('');
+      setQuantity(newQuantity);
     }
   };
 
-  const handleResetProfits = async () => {
-    if (window.confirm('هل أنت متأكد من تصفير الأرباح؟ سيتم حذف جميع سجلات المبيعات نهائياً!')) {
-      await clearSales();
-      await loadSales();
+  const incrementQuantity = () => handleQuantityChange(quantity + 1);
+  const decrementQuantity = () => handleQuantityChange(quantity - 1);
+
+  const handleSell = async () => {
+    if (!selectedProduct || sellingPrice === '') return;
+
+    // ✅ التحقق من وجود مخزون كافي قبل البيع
+    const availableQty = selectedProduct.quantity || 0;
+    if (availableQty < quantity) {
+      setError(`الكمية المتاحة: ${availableQty} فقط`);
+      return;
     }
+
+    const totalPrice = Number(sellingPrice) * quantity;
+
+    // ✅ إضافة عملية البيع
+    await addSale({
+      productId: selectedProduct.id,
+      productName: selectedProduct.name,
+      sellingPrice: totalPrice,
+      date: new Date().toISOString(),
+      quantity: quantity,
+    });
+
+    // ✅ تحديث المخزون في قاعدة البيانات
+    const newQuantity = availableQty - quantity;
+    await updateProduct(selectedProduct.id!, { quantity: newQuantity });
+
+    // ✅ تحديث المخزون في الواجهة المحلية
+    setSelectedProduct({
+      ...selectedProduct,
+      quantity: newQuantity
+    });
+
+    setSuccessMessage(`تم بيع ${quantity} × "${selectedProduct.name}" بمبلغ ${totalPrice} د.ج!`);
+    
+    // ✅ إعادة تعيين القيم بعد فترة قصيرة
+    setTimeout(() => {
+      setSelectedProduct(null);
+      setSellingPrice('');
+      setQuantity(1);
+      setError('');
+      setSuccessMessage('');
+    }, 3000);
   };
 
-  const formatDate = (dateStr: string) => {
-    try {
-      return new Date(dateStr).toLocaleString('ar-DZ');
-    } catch {
-      return dateStr;
-    }
-  };
-
-  // حساب إجمالي الكميات المباعة
-  const totalQuantitySold = sales.reduce((sum, sale) => sum + (sale.quantity || 1), 0);
+  // حساب الإجمالي
+  const totalPrice = sellingPrice !== '' ? Number(sellingPrice) * quantity : 0;
 
   return (
-    <div className="space-y-6" dir="rtl">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <h1 className="text-2xl font-bold text-gray-900">سجل المبيعات</h1>
-        <button 
-          onClick={handleResetProfits} 
-          className="bg-red-100 text-red-600 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-red-200 transition font-medium"
-        >
-          <RefreshCcw size={20} />
-          <span>تصفير الأرباح</span>
-        </button>
-      </div>
+    <div className="max-w-3xl mx-auto space-y-6" dir="rtl">
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">بيع سلعة</h1>
 
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row gap-6 items-center justify-between">
-        <div className="flex-1 w-full">
-          <label className="block text-sm font-medium text-gray-700 mb-2">البحث في السجل</label>
-          <div className="relative">
+      {successMessage && (
+        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center gap-3">
+          <CheckCircle2 size={24} />
+          <p className="font-medium">{successMessage}</p>
+        </div>
+      )}
+
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <label className="block text-sm font-medium text-gray-700 mb-2">ابحث بالاسم أو الباركود</label>
+        <div className="flex gap-2 relative">
+          <div className="relative flex-1">
             <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
               <Search className="h-5 w-5 text-gray-400" />
             </div>
-            <input 
-              type="text" 
-              className="block w-full pl-3 pr-10 py-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
-              placeholder="ابحث باسم السلعة..." 
-              value={searchQuery} 
-              onChange={(e) => setSearchQuery(e.target.value)} 
-            />
+            <input type="text" autoFocus
+              className="block w-full pl-3 pr-10 py-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-gray-50 text-lg"
+              placeholder="ابحث..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
           </div>
+          <button onClick={startScanner} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition flex items-center gap-2">
+            <Camera size={24} />
+          </button>
         </div>
-        
-        {/* إحصائيات سريعة */}
-        <div className="flex gap-4 w-full md:w-auto">
-          <div className="bg-green-50 border border-green-200 p-4 rounded-xl text-center flex-1">
-            <p className="text-sm text-green-700 font-medium mb-1">إجمالي المبيعات</p>
-            <p className="text-2xl font-bold text-green-600">{totalProfits ? `${totalProfits} د.ج` : '0 د.ج'}</p>
-          </div>
-          <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl text-center flex-1">
-            <p className="text-sm text-blue-700 font-medium mb-1">الكميات المباعة</p>
-            <p className="text-2xl font-bold text-blue-600 flex items-center justify-center gap-2">
-              <Package size={20} />
-              {totalQuantitySold}
-            </p>
-          </div>
-        </div>
-      </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        {sales.length === 0 ? (
-          <div className="text-center py-12">
-            <Calendar size={48} className="mx-auto text-gray-300 mb-4" />
-            <p className="text-gray-500 text-lg">لا توجد مبيعات مسجلة</p>
+        {isScanning && (
+          <div className="mt-4 border rounded-lg overflow-hidden">
+            <div id="reader" className="w-full max-w-sm mx-auto"></div>
+            <button onClick={stopScanner} className="w-full bg-red-100 text-red-600 py-3 font-medium hover:bg-red-200 transition">إلغاء المسح</button>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">السلعة</th>
-                  <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الكمية</th>
-                  <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">سعر الوحدة</th>
-                  <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الإجمالي</th>
-                  <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">التاريخ والوقت</th>
-                  <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">إجراءات</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {sales.map((sale) => {
-                  const quantity = sale.quantity || 1;
-                  const unitPrice = quantity > 0 ? sale.sellingPrice / quantity : sale.sellingPrice;
-                  
-                  return (
-                    <tr key={sale.id} className="hover:bg-gray-50 transition">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">{sale.productName}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium">
-                          {quantity} وحدة
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{unitPrice.toFixed(0)} د.ج</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-600">{sale.sellingPrice} د.ج</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(sale.date)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <button 
-                          onClick={() => handleDelete(sale.id!)} 
-                          className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg transition"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        )}
+
+        {searchQuery && searchResults.length > 0 && (
+          <div className="mt-2 border border-gray-200 rounded-lg overflow-hidden shadow-lg bg-white">
+            <ul className="divide-y divide-gray-100">
+              {searchResults.map((product) => (
+                <li key={product.id} onClick={() => handleSelectProduct(product)}
+                  className="p-4 hover:bg-blue-50 cursor-pointer flex justify-between items-center transition">
+                  <div>
+                    <p className="font-bold text-gray-900">{product.name}</p>
+                    <p className="text-sm text-gray-500 font-mono">{product.barcode || 'بدون باركود'}</p>
+                  </div>
+                  <div className="text-left">
+                    <p className="font-medium text-green-600">{product.retailPrice ? `${product.retailPrice} د.ج` : '-'}</p>
+                    <p className="text-xs text-gray-500">المخزون: {product.quantity || 0}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </div>
+
+      {selectedProduct && (
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-blue-200 ring-1 ring-blue-100">
+          <div className="flex items-start gap-4 mb-6">
+            <div className="w-24 h-24 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200">
+              {selectedProduct.image ? (
+                <img src={selectedProduct.image} alt={selectedProduct.name} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-gray-400"><ShoppingCart size={32} /></div>
+              )}
+            </div>
+            <div className="flex-1">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">{selectedProduct.name}</h2>
+              <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
+                <div>
+                  <span className="block text-gray-400">الكمية المتوفرة</span>
+                  <span className="font-medium text-lg text-gray-900">{selectedProduct.quantity || 0}</span>
+                </div>
+                <div>
+                  <span className="block text-gray-400">سعر الجملة</span>
+                  <span className="font-medium text-lg text-gray-900">{selectedProduct.wholesalePrice ? `${selectedProduct.wholesalePrice} د.ج` : '-'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-100 pt-4 mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">الكمية المباعة</label>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={decrementQuantity}
+                disabled={quantity <= 1}
+                className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                <Minus size={20} className="text-gray-700" />
+              </button>
+              
+              <input
+                type="number"
+                min="1"
+                max={selectedProduct.quantity || 0}
+                value={quantity}
+                onChange={(e) => handleQuantityChange(parseInt(e.target.value) || 1)}
+                className="w-24 text-center py-3 border-2 border-blue-300 rounded-lg focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none text-xl font-bold"
+              />
+              
+              <button
+                onClick={incrementQuantity}
+                disabled={quantity >= (selectedProduct.quantity || 0)}
+                className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                <Plus size={20} className="text-gray-700" />
+              </button>
+            </div>
+            {error && (
+              <p className="text-red-500 text-sm mt-2">{error}</p>
+            )}
+          </div>
+
+          <div className="border-t border-gray-100 pt-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">سعر البيع للوحدة (د.ج)</label>
+            <div className="flex gap-4">
+              <input type="number" value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value ? Number(e.target.value) : '')}
+                className="flex-1 p-4 border-2 border-blue-300 rounded-lg focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none text-2xl font-bold text-center" placeholder="0.00" />
+            </div>
+            
+            <div className="mt-4 bg-green-50 border-2 border-green-200 rounded-lg p-4 text-center">
+              <p className="text-sm text-green-700 mb-1">الإجمالي</p>
+              <p className="text-3xl font-bold text-green-600">{totalPrice} د.ج</p>
+              <p className="text-sm text-green-600 mt-1">{quantity} × {sellingPrice || 0} د.ج</p>
+            </div>
+
+            <button onClick={handleSell} disabled={sellingPrice === '' || quantity < 1 || quantity > (selectedProduct.quantity || 0)}
+              className="w-full mt-4 bg-green-600 text-white px-8 py-4 rounded-lg hover:bg-green-700 disabled:opacity-50 transition text-xl font-bold flex items-center justify-center gap-2">
+              <CheckCircle2 size={28} /> تأكيد البيع
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
