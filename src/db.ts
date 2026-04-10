@@ -194,16 +194,3 @@ export const uploadImage = async (file: File): Promise<string | null> => {
   const data = await res.json();
   return data.url || null;
 };
-// دالة جديدة لربط البيع بخصم الكمية
-export const completeSaleTransaction = async (sale: Omit<Sale, 'id'>, product: Product): Promise<void> => {
-  // 1. تسجيل عملية البيع
-  await addSale(sale);
-
-  // 2. تحديث كمية المنتج (خصم المباع من المخزون)
-  if (product.id) {
-    const newQuantity = (product.quantity || 0) - (sale.quantity || 0);
-    await updateProduct(product.id, { 
-      quantity: Math.max(0, newQuantity) 
-    });
-  }
-};
