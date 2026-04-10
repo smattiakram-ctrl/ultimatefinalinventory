@@ -89,7 +89,10 @@ export const updateProduct = async (id: string, data: Partial<Product>): Promise
   await fetch(`${API}/products/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify({
+      ...data,
+      quantity: data.quantity !== undefined ? Number(data.quantity) : undefined
+    }),
   });
 };
 
