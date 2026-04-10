@@ -77,6 +77,7 @@ export function Sell() {
     if (!selectedProduct || sellingPrice === '') return;
 
     const totalPrice = Number(sellingPrice) * quantity;
+    
     const currentQuantity = selectedProduct.quantity ?? 0;
     
     if (currentQuantity < quantity) {
@@ -85,12 +86,9 @@ export function Sell() {
     }
 
     try {
-      console.log('🟡 قبل البيع - المخزون الحالي:', currentQuantity);
-      
-      const newQuantity = currentQuantity - quantity;
-      await updateProduct(selectedProduct.id!, { quantity: newQuantity });
-      
-      console.log('🟢 بعد التحديث - المخزون الجديد:', newQuantity);
+      await updateProduct(selectedProduct.id!, { 
+        quantity: currentQuantity - quantity 
+      });
 
       await addSale({
         productId: selectedProduct.id,
@@ -108,7 +106,7 @@ export function Sell() {
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
       setError('حدث خطأ أثناء عملية البيع');
-      console.error('❌ خطأ في البيع:', err);
+      console.error(err);
     }
   };
 
