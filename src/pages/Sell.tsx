@@ -73,13 +73,10 @@ export function Sell() {
   const incrementQuantity = () => handleQuantityChange(quantity + 1);
   const decrementQuantity = () => handleQuantityChange(quantity - 1);
 
-  // ✅ الدالة المُصلحة لخصم المخزون
   const handleSell = async () => {
     if (!selectedProduct || sellingPrice === '') return;
 
     const totalPrice = Number(sellingPrice) * quantity;
-    
-    // ✅ التحقق من أن الكمية المتاحة كافية أولاً
     const currentQuantity = selectedProduct.quantity ?? 0;
     
     if (currentQuantity < quantity) {
@@ -90,15 +87,11 @@ export function Sell() {
     try {
       console.log('🟡 قبل البيع - المخزون الحالي:', currentQuantity);
       
-      // ✅ 1. تحديث المخزون أولاً (أهم)
       const newQuantity = currentQuantity - quantity;
-      await updateProduct(selectedProduct.id!, { 
-        quantity: newQuantity 
-      });
+      await updateProduct(selectedProduct.id!, { quantity: newQuantity });
       
       console.log('🟢 بعد التحديث - المخزون الجديد:', newQuantity);
 
-      // ✅ 2. تسجيل عملية البيع
       await addSale({
         productId: selectedProduct.id,
         productName: selectedProduct.name,
@@ -119,7 +112,6 @@ export function Sell() {
     }
   };
 
-  // حساب الإجمالي
   const totalPrice = sellingPrice !== '' ? Number(sellingPrice) * quantity : 0;
 
   return (
@@ -202,7 +194,6 @@ export function Sell() {
             </div>
           </div>
 
-          {/* التحكم في الكمية */}
           <div className="border-t border-gray-100 pt-4 mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">الكمية المباعة</label>
             <div className="flex items-center gap-3">
@@ -243,7 +234,6 @@ export function Sell() {
                 className="flex-1 p-4 border-2 border-blue-300 rounded-lg focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none text-2xl font-bold text-center" placeholder="0.00" />
             </div>
             
-            {/* عرض الإجمالي */}
             <div className="mt-4 bg-green-50 border-2 border-green-200 rounded-lg p-4 text-center">
               <p className="text-sm text-green-700 mb-1">الإجمالي</p>
               <p className="text-3xl font-bold text-green-600">{totalPrice} د.ج</p>
