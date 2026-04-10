@@ -1,4 +1,4 @@
-fixed_sell_tsx = """import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Product, searchProducts, updateProduct, addSale } from '../db';
 import { Search, Camera, ShoppingCart, CheckCircle2, Plus, Minus } from 'lucide-react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
@@ -259,16 +259,4 @@ export function Sell() {
       )}
     </div>
   );
-}"""
-
-# Save the file properly
-with open('/mnt/kimi/output/Sell.tsx', 'w', encoding='utf-8') as f:
-    f.write(fixed_sell_tsx)
-
-print("✅ تم حفظ الملف المُصلح بصيغة React/TypeScript الصحيحة")
-print("\n📍 المسار: /mnt/kimi/output/Sell.tsx")
-print("\n🔧 التغييرات الرئيسية:")
-print("1. إضافة try-catch للتعامل مع الأخطاء")
-print("2. تحديث المخزون قبل تسجيل البيع")
-print("3. استخدام ?? بدلاً من || للتعامل مع undefined")
-print("4. console.log للتتبع")
+}
