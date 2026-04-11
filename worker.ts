@@ -156,8 +156,7 @@ export default {
       const b = await request.json() as any;
       await env.DB.prepare(
         `UPDATE products SET name=?, wholesale_price=?, retail_price=?, quantity=?, barcode=?, image=?, category_id=? WHERE id=?`
-      ).bind(b.name, b.wholesalePrice || null, b.retailPrice || null, b.quantity || 0, b.barcode || '', b.image || '', b.categoryId, id).run();
-      return json({ success: true });
+).bind(b.name, b.wholesalePrice ?? null, b.retailPrice ?? null, b.quantity ?? 0, b.barcode ?? '', b.image ?? '', b.categoryId, id).run();
     }
 
     if (path.match(/^\/api\/products\/[^/]+$/) && request.method === 'DELETE') {
