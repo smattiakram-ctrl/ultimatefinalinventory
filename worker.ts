@@ -91,7 +91,7 @@ export default {
       if (request.method === 'POST') {
         const b = await request.json() as any;
         await env.DB.prepare(`INSERT OR REPLACE INTO categories (id, name, image, created_at) VALUES (?, ?, ?, ?)`)
-          .bind(b.id, b.name, b.image || '', Date.now()).run();
+          .bind(b.id, b.name, b.image ?? '', Date.now()).run();
         return json({ success: true });
       }
     }
@@ -100,7 +100,7 @@ export default {
       const id = path.split('/')[3];
       if (request.method === 'PUT') {
         const b = await request.json() as any;
-        await env.DB.prepare(`UPDATE categories SET name=?, image=? WHERE id=?`).bind(b.name, b.image || '', id).run();
+        await env.DB.prepare(`UPDATE categories SET name=?, image=? WHERE id=?`).bind(b.name, b.image ?? '', id).run();
         return json({ success: true });
       }
       if (request.method === 'DELETE') {
@@ -133,7 +133,7 @@ export default {
         const b = await request.json() as any;
         await env.DB.prepare(
           `INSERT OR REPLACE INTO products (id, category_id, name, wholesale_price, retail_price, quantity, barcode, image, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).bind(b.id, b.categoryId, b.name, b.wholesalePrice || null, b.retailPrice || null, b.quantity || 0, b.barcode || '', b.image || '', Date.now()).run();
+        ).bind(b.id, b.categoryId, b.name, b.wholesalePrice ?? null, b.retailPrice ?? null, b.quantity ?? 0, b.barcode ?? '', b.image ?? '', Date.now()).run();
         return json({ success: true });
       }
     }
@@ -154,9 +154,22 @@ export default {
     if (path.match(/^\/api\/products\/[^/]+$/) && request.method === 'PUT') {
       const id = path.split('/')[3];
       const b = await request.json() as any;
+      
+      // ✅ استخدام ?? بدلاً من || للحفاظ على القيم الصحيحة
       await env.DB.prepare(
         `UPDATE products SET name=?, wholesale_price=?, retail_price=?, quantity=?, barcode=?, image=?, category_id=? WHERE id=?`
-).bind(b.name, b.wholesalePrice ?? null, b.retailPrice ?? null, b.quantity ?? 0, b.barcode ?? '', b.image ?? '', b.categoryId, id).run();
+      ).bind(
+        b.name ?? null, 
+        b.wholesalePrice ?? null, 
+        b.retailPrice ?? null, 
+        b.quantity ?? 0, 
+        b.barcode ?? '', 
+        b.image ?? '', 
+        b.categoryId ?? null, 
+        id
+      ).run();
+      
+      return json({ success: true });
     }
 
     if (path.match(/^\/api\/products\/[^/]+$/) && request.method === 'DELETE') {
@@ -178,7 +191,7 @@ export default {
         const b = await request.json() as any;
         await env.DB.prepare(
           `INSERT OR REPLACE INTO loyal_customers (id, name, phone, address, created_at) VALUES (?, ?, ?, ?, ?)`
-        ).bind(b.id, b.name, b.phone || '', b.address || '', Date.now()).run();
+        ).bind(b.id, b.name, b.phone ?? '', b.address ?? '', Date.now()).run();
         return json({ success: true, id: b.id });
       }
     }
@@ -194,7 +207,7 @@ export default {
       const id = path.split('/')[3];
       const b = await request.json() as any;
       await env.DB.prepare(`UPDATE loyal_customers SET name=?, phone=?, address=? WHERE id=?`)
-        .bind(b.name, b.phone || '', b.address || '', id).run();
+        .bind(b.name, b.phone ?? '', b.address ?? '', id).run();
       return json({ success: true });
     }
 
@@ -301,7 +314,6 @@ export default {
 
         const { message } = await request.json() as any;
         
-        // استخراج الكلمات المفتاحية
         const stopWords = ['كم', 'ما', 'هل', 'أين', 'متى', 'كيف', 'عدد', 'مخزون', 'سعر', 'منتج', 'بضاعة', 'أريد', 'أن', 'أعرف', 'اعطني', 'كل', 'من', 'في', 'على', 'هذا', 'هذه', 'التي', 'الذي', 'منخفضة', 'المنخفضة', 'صنف', 'أي'];
         
         const searchTerms = message.toLowerCase()
@@ -310,7 +322,6 @@ export default {
           .filter((w: string) => w.length > 2 && !stopWords.includes(w))
           .slice(0, 3);
         
-        // جلب البيانات الأساسية مع أسماء الأصناف مباشرة
         const [categories, recentSales, customers, totalStats] = await Promise.all([
           env.DB.prepare(`SELECT * FROM categories ORDER BY created_at DESC`).all().then(r => r.results),
           env.DB.prepare(`SELECT * FROM sales ORDER BY date DESC LIMIT 20`).all().then(r => r.results),
@@ -318,7 +329,6 @@ export default {
           env.DB.prepare(`SELECT COUNT(*) as total, SUM(quantity) as total_qty FROM products`).first(),
         ]);
 
-        // جلب المنتجات مع أسماء الأصناف (JOIN)
         let relevantProducts: any[] = [];
         let lowStockProducts: any[] = [];
         
@@ -341,7 +351,6 @@ export default {
           }
         }
         
-        // جلب المنتجات المنخفضة مع أسماء الأصناف
         try {
           const [lowStock, recentProducts] = await Promise.all([
             env.DB.prepare(`
@@ -367,7 +376,6 @@ export default {
           console.error('Error fetching products:', e);
         }
 
-        // تجميع المنتجات المنخفضة حسب الصنف للسياق
         const lowStockByCategory: Record<string, any[]> = {};
         lowStockProducts.forEach((p: any) => {
           const catName = p.category_name || 'غير مصنف';
@@ -378,7 +386,6 @@ export default {
         const totalSales = recentSales.reduce((sum: number, s: any) => sum + (s.selling_price || 0), 0);
         const unpaidSales = recentSales.filter((s: any) => s.payment_status === 'unpaid');
 
-        // بناء السياق المحسّن
         let context = `
 بيانات المتجر (التاريخ: ${new Date().toLocaleDateString('ar-DZ')}):
 
@@ -390,7 +397,6 @@ export default {
 ${categories.map((c: any) => `- ${c.name}`).join('\n')}
 `;
 
-        // إضافة المنتجات المنخفضة مُجمّعة حسب الصنف
         if (lowStockProducts.length > 0) {
           context += `
 
@@ -404,7 +410,6 @@ ${products.map((p: any) => `  • ${p.name}: ${p.quantity || 0} قطعة (سعر
           });
         }
 
-        // إضافة المنتجات المطابقة للبحث
         if (relevantProducts.length > 0) {
           context += `
 
@@ -415,7 +420,6 @@ ${relevantProducts.slice(0, 10).map((p: any) =>
 `;
         }
 
-        // تفاصيل منتج محدد إذا طُلب
         let productDetails = null;
         if (relevantProducts.length > 0) {
           const exactMatch = relevantProducts.find((p: any) => 
@@ -462,7 +466,7 @@ ${customers.slice(0, 5).map((c: any) => `- ${c.name}${c.phone ? ` (${c.phone})` 
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               system_instruction: {
-                                parts: [{ 
+                parts: [{ 
                   text: `أنت مساعد ذكي لمتجر إلكتروني. لديك وصول لبيانات المتجر في الوقت الفعلي.
 أجب دائماً باللغة العربية الفصحى بشكل مختصر ومفيد.
 عند سؤالك عن "المنتجات المنخفضة في صنف معين"، ابحث في بيانات المنتجات المنخفضة المُجمّعة حسب الصنف وقدم الإجابة الدقيقة.
