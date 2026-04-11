@@ -86,14 +86,33 @@ export const addProduct = async (product: Omit<Product, 'id'>): Promise<void> =>
 };
 
 export const updateProduct = async (id: string, data: Partial<Product>): Promise<void> => {
-  await fetch(`${API}/products/${id}`, {
+  // ✅ جلب المنتج الحالي أولاً للحصول على جميع الحقول
+  const currentProduct = await fetch(`${API}/products`).then(r => r.json()).then((products: Product[]) => 
+    products.find(p => p.id === id)
+  );
+  
+  if (!currentProduct) throw new Error('Product not found');
+  
+  // ✅ دمج البيانات الجديدة مع القديمة
+  const updatedProduct = {
+    ...currentProduct,
+    ...data,
+    quantity: data.quantity !== undefined ? Number(data.quantity) : currentProduct.quantity,
+    wholesalePrice: data.wholesalePrice !== undefined ? data.wholesalePrice : currentProduct.wholesalePrice,
+    retailPrice: data.retailPrice !== undefined ? data.retailPrice : currentProduct.retailPrice,
+  };
+  
+  console.log('Updating product:', id, 'New quantity:', updatedProduct.quantity);
+  
+  const res = await fetch(`${API}/products/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      ...data,
-      quantity: data.quantity !== undefined ? Number(data.quantity) : undefined
-    }),
+    body: JSON.stringify(updatedProduct),
   });
+  
+  if (!res.ok) {
+    throw new Error(`Update failed: ${res.status}`);
+  }
 };
 
 export const deleteProduct = async (id: string): Promise<void> => {
