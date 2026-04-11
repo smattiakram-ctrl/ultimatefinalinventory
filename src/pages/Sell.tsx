@@ -57,7 +57,7 @@ export function Sell() {
   const handleQuantityChange = (newQuantity: number) => {
     if (!selectedProduct) return;
     
-    const maxQuantity = selectedProduct.quantity || 0;
+    const maxQuantity = selectedProduct.quantity ?? 0;
     
     if (newQuantity < 1) {
       setQuantity(1);
@@ -76,47 +76,48 @@ export function Sell() {
   const handleSell = async () => {
     if (!selectedProduct || sellingPrice === '') return;
 
-    // ✅ التحقق من وجود مخزون كافي قبل البيع
-    const availableQty = selectedProduct.quantity || 0;
-    if (availableQty < quantity) {
-      setError(`الكمية المتاحة: ${availableQty} فقط`);
+    const totalPrice = Number(sellingPrice) * quantity;
+    
+    // ✅ التحقق من الكمية المتاحة
+    const currentQuantity = selectedProduct.quantity ?? 0;
+    
+    if (currentQuantity < quantity) {
+      setError(`الكمية المتاحة: ${currentQuantity} فقط`);
       return;
     }
 
-    const totalPrice = Number(sellingPrice) * quantity;
+    try {
+      console.log('🟡 قبل البيع - المخزون الحالي:', currentQuantity);
+      
+      // ✅ 1. تحديث المخزون أولاً (قبل تسجيل البيع)
+      const newQuantity = currentQuantity - quantity;
+      await updateProduct(selectedProduct.id!, { 
+        quantity: newQuantity 
+      });
+      
+      console.log('🟢 بعد التحديث - المخزون الجديد:', newQuantity);
 
-    // ✅ إضافة عملية البيع
-    await addSale({
-      productId: selectedProduct.id,
-      productName: selectedProduct.name,
-      sellingPrice: totalPrice,
-      date: new Date().toISOString(),
-      quantity: quantity,
-    });
+      // ✅ 2. تسجيل عملية البيع بعد نجاح التحديث
+      await addSale({
+        productId: selectedProduct.id,
+        productName: selectedProduct.name,
+        sellingPrice: totalPrice,
+        date: new Date().toISOString(),
+        quantity: quantity,
+      });
 
-    // ✅ تحديث المخزون في قاعدة البيانات
-    const newQuantity = availableQty - quantity;
-    await updateProduct(selectedProduct.id!, { quantity: newQuantity });
-
-    // ✅ تحديث المخزون في الواجهة المحلية
-    setSelectedProduct({
-      ...selectedProduct,
-      quantity: newQuantity
-    });
-
-    setSuccessMessage(`تم بيع ${quantity} × "${selectedProduct.name}" بمبلغ ${totalPrice} د.ج!`);
-    
-    // ✅ إعادة تعيين القيم بعد فترة قصيرة
-    setTimeout(() => {
+      setSuccessMessage(`تم بيع ${quantity} × "${selectedProduct.name}" بمبلغ ${totalPrice} د.ج!`);
       setSelectedProduct(null);
       setSellingPrice('');
       setQuantity(1);
       setError('');
-      setSuccessMessage('');
-    }, 3000);
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (err) {
+      setError('حدث خطأ أثناء عملية البيع');
+      console.error('❌ خطأ في البيع:', err);
+    }
   };
 
-  // حساب الإجمالي
   const totalPrice = sellingPrice !== '' ? Number(sellingPrice) * quantity : 0;
 
   return (
@@ -165,7 +166,7 @@ export function Sell() {
                   </div>
                   <div className="text-left">
                     <p className="font-medium text-green-600">{product.retailPrice ? `${product.retailPrice} د.ج` : '-'}</p>
-                    <p className="text-xs text-gray-500">المخزون: {product.quantity || 0}</p>
+                    <p className="text-xs text-gray-500">المخزون: {product.quantity ?? 0}</p>
                   </div>
                 </li>
               ))}
@@ -189,7 +190,7 @@ export function Sell() {
               <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
                 <div>
                   <span className="block text-gray-400">الكمية المتوفرة</span>
-                  <span className="font-medium text-lg text-gray-900">{selectedProduct.quantity || 0}</span>
+                  <span className="font-medium text-lg text-gray-900">{selectedProduct.quantity ?? 0}</span>
                 </div>
                 <div>
                   <span className="block text-gray-400">سعر الجملة</span>
@@ -213,7 +214,7 @@ export function Sell() {
               <input
                 type="number"
                 min="1"
-                max={selectedProduct.quantity || 0}
+                max={selectedProduct.quantity ?? 0}
                 value={quantity}
                 onChange={(e) => handleQuantityChange(parseInt(e.target.value) || 1)}
                 className="w-24 text-center py-3 border-2 border-blue-300 rounded-lg focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none text-xl font-bold"
@@ -221,7 +222,7 @@ export function Sell() {
               
               <button
                 onClick={incrementQuantity}
-                disabled={quantity >= (selectedProduct.quantity || 0)}
+                disabled={quantity >= (selectedProduct.quantity ?? 0)}
                 className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
               >
                 <Plus size={20} className="text-gray-700" />
@@ -245,7 +246,7 @@ export function Sell() {
               <p className="text-sm text-green-600 mt-1">{quantity} × {sellingPrice || 0} د.ج</p>
             </div>
 
-            <button onClick={handleSell} disabled={sellingPrice === '' || quantity < 1 || quantity > (selectedProduct.quantity || 0)}
+            <button onClick={handleSell} disabled={sellingPrice === '' || quantity < 1 || quantity > (selectedProduct.quantity ?? 0)}
               className="w-full mt-4 bg-green-600 text-white px-8 py-4 rounded-lg hover:bg-green-700 disabled:opacity-50 transition text-xl font-bold flex items-center justify-center gap-2">
               <CheckCircle2 size={28} /> تأكيد البيع
             </button>
