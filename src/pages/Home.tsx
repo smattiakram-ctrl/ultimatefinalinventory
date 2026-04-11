@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { getCategories, getProducts, getSales, searchProducts } from '../db';
+import { getCategories, getProducts, getSales, searchProducts, updateProduct } from '../db';
 import { Product } from '../db';
-import { Package, Tags, ShoppingCart, Search, PlusCircle, TrendingUp, AlertTriangle, Bot, Send, X } from 'lucide-react';
+import { Package, Tags, ShoppingCart, Search, PlusCircle, TrendingUp, AlertTriangle, Bot, Send, X, Edit, Save, Camera, Image as ImageIcon } from 'lucide-react';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -17,6 +17,13 @@ export function Home() {
   const [lowStockCount, setLowStockCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Product[]>([]);
+
+  // ✅ حالة النافذة المنبثقة للمنتج
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedProduct, setEditedProduct] = useState<Product | null>(null);
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
 
   const [showAI, setShowAI] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -62,6 +69,68 @@ export function Home() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // ✅ فتح نافذة تفاصيل المنتج
+  const handleProductClick = (product: Product) => {
+    setSelectedProduct(product);
+    setEditedProduct({ ...product });
+    setIsEditing(false);
+    setSaveMessage('');
+  };
+
+  // ✅ إغلاق النافذة
+  const closeModal = () => {
+    setSelectedProduct(null);
+    setEditedProduct(null);
+    setIsEditing(false);
+    setSaveMessage('');
+  };
+
+  // ✅ تفعيل وضع التعديل
+  const startEditing = () => {
+    setIsEditing(true);
+    setSaveMessage('');
+  };
+
+  // ✅ حفظ التعديلات
+  const handleSave = async () => {
+    if (!editedProduct || !selectedProduct) return;
+    
+    setSaveLoading(true);
+    try {
+      await updateProduct(selectedProduct.id!, {
+        name: editedProduct.name,
+        quantity: editedProduct.quantity,
+        wholesalePrice: editedProduct.wholesalePrice,
+        retailPrice: editedProduct.retailPrice,
+        barcode: editedProduct.barcode,
+      });
+      
+      // ✅ تحديث القائمة المحلية
+      setSelectedProduct({ ...editedProduct });
+      setIsEditing(false);
+      setSaveMessage('✅ تم حفظ التعديلات بنجاح');
+      
+      // ✅ تحديث نتائج البحث
+      const results = await searchProducts(searchQuery);
+      setSearchResults(results);
+      
+      setTimeout(() => setSaveMessage(''), 3000);
+    } catch (error) {
+      setSaveMessage('❌ فشل في حفظ التعديلات');
+    } finally {
+      setSaveLoading(false);
+    }
+  };
+
+  // ✅ تحديث قيمة في النموذج
+  const handleChange = (field: keyof Product, value: any) => {
+    if (!editedProduct) return;
+    setEditedProduct({
+      ...editedProduct,
+      [field]: value
+    });
+  };
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
@@ -196,10 +265,20 @@ export function Home() {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {searchResults.map((product) => (
-                      <tr key={product.id} className="hover:bg-gray-50">
+                      <tr 
+                        key={product.id} 
+                        onClick={() => handleProductClick(product)}
+                        className="hover:bg-blue-50 cursor-pointer transition"
+                      >
                         <td className="px-6 py-4 text-sm font-medium text-gray-900">{product.name}</td>
                         <td className="px-6 py-4 text-sm text-gray-500">{product.barcode || '-'}</td>
-                        <td className="px-6 py-4 text-sm text-gray-500">{product.quantity || 0}</td>
+                        <td className="px-6 py-4 text-sm text-gray-500">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            (product.quantity || 0) <= 1 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                          }`}>
+                            {product.quantity || 0}
+                          </span>
+                        </td>
                         <td className="px-6 py-4 text-sm text-gray-500">{product.retailPrice ? `${product.retailPrice} د.ج` : '-'}</td>
                       </tr>
                     ))}
@@ -210,6 +289,217 @@ export function Home() {
           </div>
         )}
       </div>
+
+      {/* ✅ نافذة تفاصيل المنتج المنبثقة */}
+      {selectedProduct && editedProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" dir="rtl">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            {/* رأس النافذة */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50 rounded-t-2xl">
+              <h2 className="text-xl font-bold text-gray-900">
+                {isEditing ? 'تعديل السلعة' : 'تفاصيل السلعة'}
+              </h2>
+              <div className="flex items-center gap-2">
+                {!isEditing ? (
+                  <button 
+                    onClick={startEditing}
+                    className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+                  >
+                    <Edit size={18} />
+                    <span>تعديل</span>
+                  </button>
+                ) : (
+                  <button 
+                    onClick={handleSave}
+                    disabled={saveLoading}
+                    className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition disabled:opacity-50"
+                  >
+                    <Save size={18} />
+                    <span>{saveLoading ? 'جاري الحفظ...' : 'حفظ'}</span>
+                  </button>
+                )}
+                <button 
+                  onClick={closeModal}
+                  className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-lg transition"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+            </div>
+
+            {/* رسالة النجاح/الخطأ */}
+            {saveMessage && (
+              <div className={`mx-6 mt-4 p-3 rounded-lg text-center font-medium ${
+                saveMessage.includes('✅') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+              }`}>
+                {saveMessage}
+              </div>
+            )}
+
+            {/* صورة المنتج */}
+            <div className="p-6">
+              <div className="flex justify-center mb-6">
+                {selectedProduct.image ? (
+                  <img 
+                    src={selectedProduct.image} 
+                    alt={selectedProduct.name} 
+                    className="w-32 h-32 object-cover rounded-xl border-2 border-gray-200"
+                  />
+                ) : (
+                  <div className="w-32 h-32 bg-gray-100 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-400">
+                    <ImageIcon size={48} />
+                  </div>
+                )}
+              </div>
+
+              {/* تفاصيل المنتج */}
+              <div className="space-y-4">
+                {/* اسم المنتج */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">اسم السلعة</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={editedProduct.name || ''}
+                      onChange={(e) => handleChange('name', e.target.value)}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    />
+                  ) : (
+                    <p className="p-3 bg-gray-50 rounded-lg text-gray-900 font-medium">{selectedProduct.name}</p>
+                  )}
+                </div>
+
+                {/* الكمية */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">الكمية المتوفرة</label>
+                  {isEditing ? (
+                    <input
+                      type="number"
+                      value={editedProduct.quantity ?? ''}
+                      onChange={(e) => handleChange('quantity', e.target.value ? Number(e.target.value) : 0)}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    />
+                  ) : (
+                    <p className={`p-3 rounded-lg font-medium ${
+                      (selectedProduct.quantity || 0) <= 1 ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
+                    }`}>
+                      {selectedProduct.quantity || 0} قطعة
+                    </p>
+                  )}
+                </div>
+
+                {/* الأسعار */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">سعر الجملة</label>
+                    {isEditing ? (
+                      <input
+                        type="number"
+                        value={editedProduct.wholesalePrice ?? ''}
+                        onChange={(e) => handleChange('wholesalePrice', e.target.value ? Number(e.target.value) : undefined)}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      />
+                    ) : (
+                      <p className="p-3 bg-gray-50 rounded-lg text-gray-900">
+                        {selectedProduct.wholesalePrice ? `${selectedProduct.wholesalePrice} د.ج` : '-'}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">سعر التفصيل</label>
+                    {isEditing ? (
+                      <input
+                        type="number"
+                        value={editedProduct.retailPrice ?? ''}
+                        onChange={(e) => handleChange('retailPrice', e.target.value ? Number(e.target.value) : undefined)}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      />
+                    ) : (
+                      <p className="p-3 bg-green-50 rounded-lg text-green-700 font-bold">
+                        {selectedProduct.retailPrice ? `${selectedProduct.retailPrice} د.ج` : '-'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* الباركود */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">الباركود</label>
+                  {isEditing ? (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={editedProduct.barcode || ''}
+                        onChange={(e) => handleChange('barcode', e.target.value)}
+                        className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono"
+                      />
+                      <button 
+                        className="bg-gray-100 p-3 rounded-lg hover:bg-gray-200 transition"
+                        title="مسح الباركود"
+                      >
+                        <Camera size={20} className="text-gray-600" />
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="p-3 bg-gray-50 rounded-lg text-gray-900 font-mono">
+                      {selectedProduct.barcode || '-'}
+                    </p>
+                  )}
+                </div>
+
+                {/* معلومات إضافية */}
+                {!isEditing && (
+                  <div className="pt-4 border-t border-gray-100">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-500">معرف المنتج:</span>
+                        <span className="mr-2 font-mono text-gray-700">{selectedProduct.id}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">الصنف:</span>
+                        <span className="mr-2 text-gray-700">{selectedProduct.categoryId || '-'}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* أزرار في الأسفل */}
+              <div className="flex gap-3 mt-6 pt-4 border-t border-gray-100">
+                {isEditing ? (
+                  <>
+                    <button 
+                      onClick={handleSave}
+                      disabled={saveLoading}
+                      className="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition disabled:opacity-50 font-medium"
+                    >
+                      {saveLoading ? 'جاري الحفظ...' : 'حفظ التعديلات'}
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setIsEditing(false);
+                        setEditedProduct({ ...selectedProduct });
+                        setSaveMessage('');
+                      }}
+                      className="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg hover:bg-gray-300 transition font-medium"
+                    >
+                      إلغاء
+                    </button>
+                  </>
+                ) : (
+                  <Link 
+                    to={`/categories/${selectedProduct.categoryId}`}
+                    onClick={closeModal}
+                    className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition text-center font-medium"
+                  >
+                    الذهاب للصنف
+                  </Link>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showAI && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" dir="rtl">
